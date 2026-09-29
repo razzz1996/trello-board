@@ -15,7 +15,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 
 import { ApiError, commandTask, getBoardSnapshot } from "./api";
@@ -89,6 +89,7 @@ export function BoardPage({ user }: { user: SessionUser }) {
   const { boardId } = useParams();
   const navigate = useNavigate();
   const [snapshot, setSnapshot] = useState<BoardSnapshot | null>(null);
+  const snapshotRevision = useRef<number | undefined>(undefined);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -104,8 +105,11 @@ export function BoardPage({ user }: { user: SessionUser }) {
   const refresh = useCallback(async () => {
     if (!boardId) return;
     try {
-      const fresh = await getBoardSnapshot(boardId);
-      setSnapshot(fresh);
+      const fresh = await getBoardSnapshot(boardId, snapshotRevision.current);
+      if (fresh !== null) {
+        snapshotRevision.current = fresh.revision;
+        setSnapshot(fresh);
+      }
       setError("");
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 404) {
@@ -115,6 +119,11 @@ export function BoardPage({ user }: { user: SessionUser }) {
       setError(errorMessage(caught));
     }
   }, [boardId, navigate]);
+
+  useEffect(() => {
+    snapshotRevision.current = undefined;
+    setSnapshot(null);
+  }, [boardId]);
 
   useEffect(() => {
     void refresh();
@@ -262,11 +271,9 @@ export function BoardPage({ user }: { user: SessionUser }) {
         <TaskDetailModal
           task={selected}
           snapshot={snapshot}
+          currentUser={user}
           onClose={() => setSelectedTaskId(null)}
-          onChanged={async () => {
-            await refresh();
-            setSelectedTaskId(null);
-          }}
+          onChanged={refresh}
           onSubmit={() => {
             setSelectedTaskId(null);
             setSubmitTaskId(selected.id);

@@ -1,0 +1,78 @@
+﻿{
+  "missing": [
+    "psql"
+  ],
+  "ok": false,
+  "project_root": "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE",
+  "tools": {
+    "caddy": {
+      "path": "C:\\Users\\PC 19\\AppData\\Local\\Microsoft\\WinGet\\Packages\\CaddyServer.Caddy_Microsoft.Winget.Source_8wekyb3d8bbwe\\caddy.exe",
+      "present": true,
+      "probe": {
+        "args": [
+          "C:\\Users\\PC 19\\AppData\\Local\\Microsoft\\WinGet\\Packages\\CaddyServer.Caddy_Microsoft.Winget.Source_8wekyb3d8bbwe\\caddy.exe",
+          "version"
+        ],
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "v2.11.4 h1:XKxkMTgNSizEvKG6QHue6cAsFOteU2qA61w2tKkCWi0=\n"
+      }
+    },
+    "git": {
+      "path": "C:\\Program Files\\Git\\cmd\\git.exe",
+      "present": true,
+      "probe": {
+        "args": [
+          "C:\\Program Files\\Git\\cmd\\git.exe",
+          "--version"
+        ],
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "git version 2.55.0.windows.5\n"
+      }
+    },
+    "node": {
+      "path": "C:\\Program Files\\nodejs\\node.EXE",
+      "present": true,
+      "probe": {
+        "args": [
+          "C:\\Program Files\\nodejs\\node.EXE",
+          "--version"
+        ],
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "v24.19.0\n"
+      }
+    },
+    "npm": {
+      "path": "C:\\Program Files\\nodejs\\npm.cmd",
+      "present": true,
+      "probe": {
+        "args": [
+          "C:\\Program Files\\nodejs\\npm.cmd",
+          "--version"
+        ],
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "11.17.0\n"
+      }
+    },
+    "psql": {
+      "path": null,
+      "present": false
+    },
+    "python": {
+      "path": "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\.venv\\Scripts\\python.exe",
+      "present": true,
+      "probe": {
+        "args": [
+          "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\.venv\\Scripts\\python.exe",
+          "--version"
+        ],
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "Python 3.14.7\n"
+      }
+    }
+  }
+}

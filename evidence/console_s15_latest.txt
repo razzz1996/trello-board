@@ -1,0 +1,256 @@
+﻿{
+  "checks": [
+    {
+      "label": "doctor",
+      "missing": [],
+      "ok": true,
+      "project_root": "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE",
+      "tools": {
+        "caddy": {
+          "path": "C:\\Users\\PC 19\\AppData\\Local\\Microsoft\\WinGet\\Packages\\CaddyServer.Caddy_Microsoft.Winget.Source_8wekyb3d8bbwe\\caddy.exe",
+          "present": true,
+          "probe": {
+            "args": [
+              "C:\\Users\\PC 19\\AppData\\Local\\Microsoft\\WinGet\\Packages\\CaddyServer.Caddy_Microsoft.Winget.Source_8wekyb3d8bbwe\\caddy.exe",
+              "version"
+            ],
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "v2.11.4 h1:XKxkMTgNSizEvKG6QHue6cAsFOteU2qA61w2tKkCWi0=\n"
+          }
+        },
+        "git": {
+          "path": "C:\\Program Files\\Git\\cmd\\git.exe",
+          "present": true,
+          "probe": {
+            "args": [
+              "C:\\Program Files\\Git\\cmd\\git.exe",
+              "--version"
+            ],
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "git version 2.55.0.windows.5\n"
+          }
+        },
+        "node": {
+          "path": "C:\\Program Files\\nodejs\\node.EXE",
+          "present": true,
+          "probe": {
+            "args": [
+              "C:\\Program Files\\nodejs\\node.EXE",
+              "--version"
+            ],
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "v24.19.0\n"
+          }
+        },
+        "npm": {
+          "path": "C:\\Program Files\\nodejs\\npm.cmd",
+          "present": true,
+          "probe": {
+            "args": [
+              "C:\\Program Files\\nodejs\\npm.cmd",
+              "--version"
+            ],
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "11.17.0\n"
+          }
+        },
+        "psql": {
+          "path": "C:\\Program Files\\PostgreSQL\\18\\bin\\psql.exe",
+          "present": true,
+          "probe": {
+            "args": [
+              "C:\\Program Files\\PostgreSQL\\18\\bin\\psql.exe",
+              "--version"
+            ],
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "psql (PostgreSQL) 18.6\n"
+          }
+        },
+        "python": {
+          "path": "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\.venv\\Scripts\\python.exe",
+          "present": true,
+          "probe": {
+            "args": [
+              "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\.venv\\Scripts\\python.exe",
+              "--version"
+            ],
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "Python 3.14.7\n"
+          }
+        }
+      }
+    },
+    {
+      "config": "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\config\\deployment.json",
+      "environment": "development",
+      "label": "config_check",
+      "ok": true,
+      "restore_mode": false,
+      "slack_mode": "off"
+    },
+    {
+      "args": [
+        "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\.venv\\Scripts\\python.exe",
+        "-m",
+        "compileall",
+        "-q",
+        "backend",
+        "ops",
+        "tests"
+      ],
+      "exit_code": 0,
+      "label": "python_compile",
+      "ok": true,
+      "stderr": "",
+      "stdout": ""
+    },
+    {
+      "args": [
+        "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\.venv\\Scripts\\python.exe",
+        "backend/manage.py",
+        "check",
+        "--fail-level",
+        "WARNING"
+      ],
+      "exit_code": 0,
+      "label": "django_check",
+      "ok": true,
+      "stderr": "",
+      "stdout": "System check identified no issues (0 silenced).\n"
+    },
+    {
+      "args": [
+        "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\.venv\\Scripts\\python.exe",
+        "backend/manage.py",
+        "makemigrations",
+        "--check",
+        "--dry-run",
+        "--noinput"
+      ],
+      "exit_code": 0,
+      "label": "migration_drift",
+      "ok": true,
+      "stderr": "",
+      "stdout": "No changes detected\n"
+    },
+    {
+      "args": [
+        "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\.venv\\Scripts\\python.exe",
+        "-m",
+        "ruff",
+        "check",
+        "backend",
+        "ops",
+        "tests"
+      ],
+      "exit_code": 0,
+      "label": "ruff",
+      "ok": true,
+      "stderr": "",
+      "stdout": "All checks passed!\n"
+    },
+    {
+      "args": [
+        "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\.venv\\Scripts\\python.exe",
+        "-m",
+        "mypy",
+        "backend",
+        "ops",
+        "--ignore-missing-imports"
+      ],
+      "exit_code": 0,
+      "label": "mypy",
+      "ok": true,
+      "stderr": "",
+      "stdout": "Success: no issues found in 68 source files\n"
+    },
+    {
+      "args": [
+        "C:\\Program Files\\nodejs\\npm.cmd",
+        "run",
+        "typecheck"
+      ],
+      "exit_code": 0,
+      "label": "frontend_typecheck",
+      "ok": true,
+      "stderr": "",
+      "stdout": "\n> emega-productivity-frontend@0.1.0 typecheck\n> tsc --noEmit -p tsconfig.json --pretty false && tsc --noEmit -p tsconfig.node.json --pretty false\n\n"
+    },
+    {
+      "args": [
+        "C:\\Program Files\\nodejs\\npm.cmd",
+        "run",
+        "build"
+      ],
+      "exit_code": 0,
+      "label": "frontend_build",
+      "ok": true,
+      "stderr": "",
+      "stdout": "\n> emega-productivity-frontend@0.1.0 build\n> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && vite build\n\n\u001b[36mvite v8.3.1 \u001b[32mbuilding client environment for production...\u001b[36m\u001b[39m\ntransforming...\n\u2713 37 modules transformed.\nrendering chunks...\ncomputing gzip size...\ndist/index.html                   0.45 kB \u2502 gzip:   0.30 kB\ndist/assets/index-k5-cyrmV.css   12.46 kB \u2502 gzip:   3.38 kB\ndist/assets/index-mT5gSYK9.js   370.13 kB \u2502 gzip: 111.55 kB\n\n\u001b[32m\u2713 built in 125ms\u001b[39m\n"
+    },
+    {
+      "args": [
+        "C:\\Program Files\\nodejs\\npm.cmd",
+        "audit",
+        "--audit-level=high"
+      ],
+      "exit_code": 0,
+      "label": "npm_audit",
+      "ok": true,
+      "stderr": "",
+      "stdout": "found 0 vulnerabilities\n"
+    },
+    {
+      "args": [
+        "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\.venv\\Scripts\\python.exe",
+        "-m",
+        "pytest",
+        "tests/test_calendar_engine.py",
+        "-q"
+      ],
+      "exit_code": 0,
+      "label": "calendar_fixtures",
+      "ok": true,
+      "stderr": "",
+      "stdout": ".........                                                                [100%]\n9 passed in 0.04s\n"
+    },
+    {
+      "args": [
+        "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\.venv\\Scripts\\python.exe",
+        "backend/manage.py",
+        "showmigrations",
+        "--plan"
+      ],
+      "exit_code": 0,
+      "label": "postgres_connectivity",
+      "ok": true,
+      "stderr": "",
+      "stdout": "[X]  contenttypes.0001_initial\n[X]  contenttypes.0002_remove_content_type_name\n[X]  auth.0001_initial\n[X]  auth.0002_alter_permission_name_max_length\n[X]  auth.0003_alter_user_email_max_length\n[X]  auth.0004_alter_user_username_opts\n[X]  auth.0005_alter_user_last_login_null\n[X]  auth.0006_require_contenttypes_0002\n[X]  auth.0007_alter_validators_add_error_messages\n[X]  auth.0008_alter_user_username_max_length\n[X]  auth.0009_alter_user_last_name_max_length\n[X]  auth.0010_alter_group_name_max_length\n[X]  auth.0011_update_proxy_permissions\n[X]  auth.0012_alter_user_first_name_max_length\n[X]  accounts.0001_initial\n[X]  accounts.0002_loginthrottle\n[X]  accounts.0003_accountauditevent\n[X]  admin.0001_initial\n[X]  admin.0002_logentry_remove_auto_add\n[X]  admin.0003_logentry_add_action_flag_choices\n[X]  boards.0001_initial\n[X]  core.0001_initial\n[X]  reports.0001_initial\n[X]  workitems.0001_initial\n[X]  notifications.0001_initial\n[X]  notifications.0002_workerheartbeat_notification_report_snapshot_and_more\n[X]  schedules.0001_initial\n[X]  schedules.0002_remove_schedulepause_schedule_pause_end_after_start_and_more\n[X]  sessions.0001_initial\n[X]  workitems.0002_task_draft_acceptance_criteria_task_draft_due_at\n[X]  workitems.0003_alter_review_reviewed_at_and_more\n"
+    },
+    {
+      "args": [
+        "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\.venv\\Scripts\\python.exe",
+        "-m",
+        "pytest",
+        "tests",
+        "--reuse-db",
+        "-q"
+      ],
+      "exit_code": 0,
+      "label": "database_integration",
+      "ok": true,
+      "stderr": "",
+      "stdout": "..................................................................       [100%]\n66 passed in 18.49s\n"
+    }
+  ],
+  "evidence_path": "evidence\\verify_s15_20260929T052142Z.json",
+  "failed": [],
+  "ok": true,
+  "step": "S15"
+}

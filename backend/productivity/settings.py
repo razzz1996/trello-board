@@ -15,6 +15,9 @@ with DEPLOYMENT_PATH.open("r", encoding="utf-8-sig") as handle:
     DEPLOYMENT = json.load(handle)
 
 ENVIRONMENT = DEPLOYMENT["environment"]
+AI_ENABLED = bool(DEPLOYMENT["ai_enabled"])
+if AI_ENABLED:
+    raise RuntimeError("AI/model execution is disabled for this release.")
 DEBUG = ENVIRONMENT == "development"
 
 secret_path = Path(
@@ -94,6 +97,11 @@ TEMPLATES = [
 WSGI_APPLICATION = "productivity.wsgi.application"
 
 db_password_file = os.environ.get("PRODUCTIVITY_DB_PASSWORD_FILE")
+if not db_password_file:
+    local_db_secret = PROJECT_ROOT / "runtime" / "secrets" / "postgres_app_secret.txt"
+    if local_db_secret.is_file():
+        db_password_file = str(local_db_secret)
+
 db_password = ""
 if db_password_file:
     p = Path(db_password_file)
@@ -159,6 +167,25 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "eMEGA Productivity API",
     "VERSION": "0.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
+}
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "json": {"()": "core.logging.RedactingJsonFormatter"},
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "json"},
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+    "loggers": {
+        "django.request": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+        "productivity": {"handlers": ["console"], "level": "INFO", "propagate": False},
+    },
 }
 
 LOGIN_URL = "/api/v1/session/login/"

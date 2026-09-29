@@ -1,8 +1,14 @@
-﻿{
+{
   "schema_version": 1,
   "environment": "development",
   "timezone": "Asia/Manila",
-  "workdays_iso": [1, 2, 3, 4, 5],
+  "workdays_iso": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
   "workday_start": "08:00",
   "workday_end": "18:00",
   "member_digest_time": "08:30",
@@ -17,5 +23,8 @@
   "private_base_url": null,
   "allowed_client_cidrs": [],
   "manager_user_id": null,
-  "backup_target": null
+  "backup_target": null,
+  "backup_daily_retention": 7,
+  "backup_weekly_retention": 4,
+  "ai_enabled": false
 }

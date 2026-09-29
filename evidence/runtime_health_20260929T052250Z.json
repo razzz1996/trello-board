@@ -1,0 +1,48 @@
+﻿{
+    "live":  {
+                 "status":  "alive"
+             },
+    "ready":  {
+                  "status":  "ready",
+                  "environment":  "development",
+                  "components":  {
+                                     "database":  {
+                                                      "ok":  true
+                                                  },
+                                     "scheduler":  {
+                                                       "ok":  true,
+                                                       "last_seen_at":  "2026-09-29T05:22:36.347740+00:00"
+                                                   },
+                                     "worker":  {
+                                                    "ok":  true,
+                                                    "last_seen_at":  "2026-09-29T05:22:40.979844+00:00"
+                                                }
+                                 }
+              },
+    "postgres_listeners":  [
+                               {
+                                   "LocalAddress":  "::1",
+                                   "LocalPort":  5432,
+                                   "OwningProcess":  32400
+                               },
+                               {
+                                   "LocalAddress":  "127.0.0.1",
+                                   "LocalPort":  5432,
+                                   "OwningProcess":  32400
+                               }
+                           ],
+    "caddy_listeners":  [
+                            {
+                                "LocalAddress":  "127.0.0.1",
+                                "LocalPort":  8080,
+                                "OwningProcess":  4336
+                            }
+                        ],
+    "waitress_listeners":  [
+                               {
+                                   "LocalAddress":  "127.0.0.1",
+                                   "LocalPort":  8000,
+                                   "OwningProcess":  1628
+                               }
+                           ]
+}

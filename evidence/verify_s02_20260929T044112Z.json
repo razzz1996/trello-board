@@ -1,0 +1,201 @@
+{
+  "checks": [
+    {
+      "label": "doctor",
+      "missing": [],
+      "ok": true,
+      "project_root": "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE",
+      "tools": {
+        "caddy": {
+          "path": "C:\\Users\\PC 19\\AppData\\Local\\Microsoft\\WinGet\\Packages\\CaddyServer.Caddy_Microsoft.Winget.Source_8wekyb3d8bbwe\\caddy.exe",
+          "present": true,
+          "probe": {
+            "args": [
+              "C:\\Users\\PC 19\\AppData\\Local\\Microsoft\\WinGet\\Packages\\CaddyServer.Caddy_Microsoft.Winget.Source_8wekyb3d8bbwe\\caddy.exe",
+              "version"
+            ],
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "v2.11.4 h1:XKxkMTgNSizEvKG6QHue6cAsFOteU2qA61w2tKkCWi0=\n"
+          }
+        },
+        "git": {
+          "path": "C:\\Program Files\\Git\\cmd\\git.exe",
+          "present": true,
+          "probe": {
+            "args": [
+              "C:\\Program Files\\Git\\cmd\\git.exe",
+              "--version"
+            ],
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "git version 2.55.0.windows.5\n"
+          }
+        },
+        "node": {
+          "path": "C:\\Program Files\\nodejs\\node.EXE",
+          "present": true,
+          "probe": {
+            "args": [
+              "C:\\Program Files\\nodejs\\node.EXE",
+              "--version"
+            ],
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "v24.19.0\n"
+          }
+        },
+        "npm": {
+          "path": "C:\\Program Files\\nodejs\\npm.cmd",
+          "present": true,
+          "probe": {
+            "args": [
+              "C:\\Program Files\\nodejs\\npm.cmd",
+              "--version"
+            ],
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "11.17.0\n"
+          }
+        },
+        "psql": {
+          "path": "C:\\Program Files\\PostgreSQL\\18\\bin\\psql.exe",
+          "present": true,
+          "probe": {
+            "args": [
+              "C:\\Program Files\\PostgreSQL\\18\\bin\\psql.exe",
+              "--version"
+            ],
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "psql (PostgreSQL) 18.6\n"
+          }
+        },
+        "python": {
+          "path": "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\.venv\\Scripts\\python.exe",
+          "present": true,
+          "probe": {
+            "args": [
+              "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\.venv\\Scripts\\python.exe",
+              "--version"
+            ],
+            "exit_code": 0,
+            "stderr": "",
+            "stdout": "Python 3.14.7\n"
+          }
+        }
+      }
+    },
+    {
+      "config": "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\config\\deployment.json",
+      "environment": "development",
+      "label": "config_check",
+      "ok": true,
+      "restore_mode": false,
+      "slack_mode": "off"
+    },
+    {
+      "args": [
+        "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\.venv\\Scripts\\python.exe",
+        "-m",
+        "compileall",
+        "-q",
+        "backend",
+        "ops",
+        "tests"
+      ],
+      "exit_code": 0,
+      "label": "python_compile",
+      "ok": true,
+      "stderr": "",
+      "stdout": ""
+    },
+    {
+      "args": [
+        "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\.venv\\Scripts\\python.exe",
+        "backend/manage.py",
+        "check",
+        "--fail-level",
+        "WARNING"
+      ],
+      "exit_code": 0,
+      "label": "django_check",
+      "ok": true,
+      "stderr": "",
+      "stdout": "System check identified no issues (0 silenced).\n"
+    },
+    {
+      "args": [
+        "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\.venv\\Scripts\\python.exe",
+        "backend/manage.py",
+        "makemigrations",
+        "--check",
+        "--dry-run",
+        "--noinput"
+      ],
+      "exit_code": 0,
+      "label": "migration_drift",
+      "ok": true,
+      "stderr": "",
+      "stdout": "No changes detected\n"
+    },
+    {
+      "args": [
+        "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\.venv\\Scripts\\python.exe",
+        "-m",
+        "ruff",
+        "check",
+        "backend",
+        "ops",
+        "tests"
+      ],
+      "exit_code": 0,
+      "label": "ruff",
+      "ok": true,
+      "stderr": "",
+      "stdout": "All checks passed!\n"
+    },
+    {
+      "args": [
+        "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\.venv\\Scripts\\python.exe",
+        "-m",
+        "mypy",
+        "backend",
+        "ops",
+        "--ignore-missing-imports"
+      ],
+      "exit_code": 0,
+      "label": "mypy",
+      "ok": true,
+      "stderr": "",
+      "stdout": "Success: no issues found in 65 source files\n"
+    },
+    {
+      "args": [
+        "C:\\Program Files\\nodejs\\npm.cmd",
+        "run",
+        "typecheck"
+      ],
+      "exit_code": 0,
+      "label": "frontend_typecheck",
+      "ok": true,
+      "stderr": "",
+      "stdout": "\n> emega-productivity-frontend@0.1.0 typecheck\n> tsc --noEmit -p tsconfig.json --pretty false && tsc --noEmit -p tsconfig.node.json --pretty false\n\n"
+    },
+    {
+      "args": [
+        "C:\\Program Files\\nodejs\\npm.cmd",
+        "audit",
+        "--audit-level=high"
+      ],
+      "exit_code": 0,
+      "label": "npm_audit",
+      "ok": true,
+      "stderr": "",
+      "stdout": "found 0 vulnerabilities\n"
+    }
+  ],
+  "failed": [],
+  "ok": true,
+  "step": "S02"
+}

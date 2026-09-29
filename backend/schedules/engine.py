@@ -457,3 +457,53 @@ def generate_preview(
         if len(result) == count:
             return result
     return result
+
+
+def generate_due_occurrences(
+    rule: dict[str, Any],
+    *,
+    through: datetime,
+    after_period_key: str = "",
+    limit: int = 100,
+    pauses: list[Any] | None = None,
+) -> list[PreviewOccurrence]:
+    """Return eligible occurrences released at or before the supplied instant."""
+    validate_rule(rule)
+    if through.tzinfo is None:
+        raise RuleError("through must include a timezone.")
+    if limit < 1 or limit > 1000:
+        raise RuleError("Generation limit must be between 1 and 1000.")
+
+    zone = _zone(rule["timezone"])
+    workdays, holidays = _calendar(rule)
+    cutoff = through.astimezone(zone)
+    pause_values = pauses or []
+    frequency = rule["frequency"]
+    if frequency == "daily":
+        candidates = _daily_periods(rule, cutoff)
+    elif frequency == "weekly":
+        candidates = _weekly_periods(rule)
+    else:
+        candidates = _monthly_periods(rule, workdays, holidays)
+
+    result: list[PreviewOccurrence] = []
+    for period_key, base_release, base_due in candidates:
+        if after_period_key and period_key <= after_period_key:
+            continue
+        occurrence = _build_occurrence(
+            period_key=period_key,
+            base_release=base_release,
+            base_due=base_due,
+            rule=rule,
+            zone=zone,
+            workdays=workdays,
+            holidays=holidays,
+        )
+        if occurrence.release_at > cutoff:
+            break
+        if _is_paused(base_release, pause_values):
+            continue
+        result.append(occurrence)
+        if len(result) >= limit:
+            break
+    return result

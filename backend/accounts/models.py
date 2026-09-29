@@ -23,6 +23,31 @@ class User(AbstractUser):
         indexes = [models.Index(fields=["is_active", "username"])]
 
 
+class AccountAuditEvent(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    actor = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        related_name="account_audit_events",
+    )
+    target = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        related_name="account_audit_history",
+    )
+    action = models.CharField(max_length=100)
+    reason = models.TextField(max_length=2000, blank=True)
+    before = models.JSONField(default=dict)
+    after = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["target", "created_at"]),
+            models.Index(fields=["actor", "created_at"]),
+        ]
+
+
 class LoginThrottle(models.Model):
     class Scope(models.TextChoices):
         ACCOUNT = "ACCOUNT", "Account"

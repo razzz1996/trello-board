@@ -1,0 +1,4 @@
+﻿
+> emega-productivity-frontend@0.1.0 typecheck
+> tsc --noEmit -p tsconfig.json --pretty false && tsc --noEmit -p tsconfig.node.json --pretty false
+

@@ -4,9 +4,9 @@ import hashlib
 import hmac
 from datetime import timedelta
 
+from core.clock import now
 from django.conf import settings
 from django.db import transaction
-from django.utils import timezone
 
 from .models import LoginThrottle
 
@@ -40,31 +40,31 @@ def _keys(username: str, address: str) -> list[tuple[str, str]]:
 
 
 def is_allowed(username: str, address: str) -> bool:
-    now = timezone.now()
+    observed_at = now()
     hashes = _keys(username, address)
     for scope, key_hash in hashes:
         row = LoginThrottle.objects.filter(scope=scope, key_hash=key_hash).first()
-        if row is not None and row.locked_until is not None and row.locked_until > now:
+        if row is not None and row.locked_until is not None and row.locked_until > observed_at:
             return False
     return True
 
 
 def record_failure(username: str, address: str) -> None:
-    now = timezone.now()
+    observed_at = now()
     with transaction.atomic():
         for scope, key_hash in _keys(username, address):
             row, _ = LoginThrottle.objects.select_for_update().get_or_create(
                 scope=scope,
                 key_hash=key_hash,
-                defaults={"window_started_at": now},
+                defaults={"window_started_at": observed_at},
             )
-            if now - row.window_started_at >= WINDOW:
-                row.window_started_at = now
+            if observed_at - row.window_started_at >= WINDOW:
+                row.window_started_at = observed_at
                 row.failure_count = 0
                 row.locked_until = None
             row.failure_count += 1
             if row.failure_count >= MAX_FAILURES:
-                row.locked_until = now + LOCK_DURATION
+                row.locked_until = observed_at + LOCK_DURATION
             row.save(
                 update_fields=[
                     "window_started_at",

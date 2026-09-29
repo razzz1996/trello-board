@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +31,21 @@ def _now_slug() -> str:
     return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
+def _subprocess_env() -> dict[str, str]:
+    env = os.environ.copy()
+    app_secret = ROOT / "runtime" / "secrets" / "postgres_app_secret.txt"
+    maintenance_secret = ROOT / "runtime" / "secrets" / "postgres_maintenance_secret.txt"
+    env.setdefault("PRODUCTIVITY_DB_USER", "productivity_app")
+    env.setdefault("PRODUCTIVITY_DB_HOST", "127.0.0.1")
+    env.setdefault("PRODUCTIVITY_DB_PORT", "5432")
+    if app_secret.is_file():
+        env.setdefault("PRODUCTIVITY_DB_PASSWORD_FILE", str(app_secret))
+    env.setdefault("PRODUCTIVITY_MAINTENANCE_DB_USER", "productivity_maintenance")
+    if maintenance_secret.is_file():
+        env.setdefault("PRODUCTIVITY_MAINTENANCE_DB_PASSWORD_FILE", str(maintenance_secret))
+    return env
+
+
 def _run(args: list[str], *, cwd: Path = ROOT, timeout: int = 180) -> dict[str, Any]:
     try:
         completed = subprocess.run(  # noqa: S603 - fixed argument arrays; shell=False
@@ -41,6 +58,7 @@ def _run(args: list[str], *, cwd: Path = ROOT, timeout: int = 180) -> dict[str, 
             encoding="utf-8",
             errors="replace",
             shell=False,
+            env=_subprocess_env(),
         )
         return {
             "args": [str(item) for item in args],
@@ -72,7 +90,7 @@ def _tool(name: str) -> str | None:
     candidates: list[Path] = []
     if name == "git":
         candidates.append(Path(r"C:\Program Files\Git\cmd\git.exe"))
-    elif name in {"psql", "pg_dump", "pg_restore"}:
+    elif name in {"psql", "pg_dump", "pg_restore", "createdb", "dropdb"}:
         executable = f"{name}.exe"
         candidates.extend(Path(r"C:\Program Files\PostgreSQL").glob(f"*\\bin\\{executable}"))
     elif name == "caddy":
@@ -149,6 +167,7 @@ def _base_checks() -> list[dict[str, Any]]:
         _check("ruff", [str(PYTHON), "-m", "ruff", "check", "backend", "ops", "tests"]),
         _check("mypy", [str(PYTHON), "-m", "mypy", "backend", "ops", "--ignore-missing-imports"]),
         _check("frontend_typecheck", [str(NPM), "run", "typecheck"], cwd=ROOT / "frontend"),
+        _check("frontend_build", [str(NPM), "run", "build"], cwd=ROOT / "frontend"),
         _check("npm_audit", [str(NPM), "audit", "--audit-level=high"], cwd=ROOT / "frontend"),
     ]
 
@@ -180,6 +199,20 @@ def verify(step: str | None = None, verify_all: bool = False) -> tuple[int, dict
             _check(
                 "postgres_connectivity",
                 [str(PYTHON), "backend/manage.py", "showmigrations", "--plan"],
+            )
+        )
+        checks.append(
+            _check(
+                "database_integration",
+                [
+                    str(PYTHON),
+                    "-m",
+                    "pytest",
+                    "tests",
+                    "--reuse-db",
+                    "-q",
+                ],
+                timeout=240,
             )
         )
 
@@ -218,26 +251,329 @@ def status() -> tuple[int, dict[str, Any]]:
     return 0, {"ok": True, "counts": counts, "blocked": blocked, "steps": rows}
 
 
+def _read_secret_file(env_name: str) -> str:
+    raw = os.environ.get(env_name)
+    if not raw:
+        defaults = {
+            "PRODUCTIVITY_DB_PASSWORD_FILE": ROOT / "runtime" / "secrets" / "postgres_app_secret.txt",
+            "PRODUCTIVITY_MAINTENANCE_DB_PASSWORD_FILE": ROOT / "runtime" / "secrets" / "postgres_maintenance_secret.txt",
+        }
+        candidate = defaults.get(env_name)
+        if candidate is None or not candidate.is_file():
+            raise RuntimeError(f"{env_name} is not configured.")
+        raw = str(candidate)
+    path = Path(raw)
+    if not path.is_file():
+        raise RuntimeError(f"{env_name} does not point to an existing file.")
+    value = path.read_text(encoding="utf-8").strip()
+    if not value:
+        raise RuntimeError(f"{env_name} points to an empty file.")
+    return value
+
+
+def _database_identity(config: dict[str, Any]) -> tuple[str, str, str, str]:
+    environment = str(config["environment"])
+    default_name = {
+        "development": "productivity_dev",
+        "test": "productivity_test",
+        "pilot": "productivity_pilot",
+    }[environment]
+    return (
+        os.environ.get("PRODUCTIVITY_DB_HOST", "127.0.0.1"),
+        os.environ.get("PRODUCTIVITY_DB_PORT", "5432"),
+        os.environ.get("PRODUCTIVITY_DB_USER", "productivity_app"),
+        os.environ.get("PRODUCTIVITY_DB_NAME", default_name),
+    )
+
+
+def _run_with_password(args: list[str], password: str, *, timeout: int = 600) -> dict[str, Any]:
+    env = os.environ.copy()
+    env["PGPASSWORD"] = password
+    try:
+        completed = subprocess.run(  # noqa: S603 - fixed argument arrays; shell=False
+            args,
+            cwd=ROOT,
+            timeout=timeout,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            shell=False,
+            env=env,
+        )
+        return {
+            "args": [str(item) for item in args],
+            "exit_code": completed.returncode,
+            "stdout": _redact(completed.stdout[-20000:]),
+            "stderr": _redact(completed.stderr[-20000:]),
+        }
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {
+            "args": [str(item) for item in args],
+            "exit_code": 127,
+            "stdout": "",
+            "stderr": _redact(str(exc)),
+        }
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _prune_backups(
+    directory: Path,
+    *,
+    daily_retention: int,
+    weekly_retention: int,
+) -> list[str]:
+    paths = sorted(
+        directory.glob("productivity_*.dump"),
+        key=lambda item: item.stat().st_mtime,
+        reverse=True,
+    )
+    keep: set[Path] = set()
+    kept_dates: set[date] = set()
+    kept_weeks: set[tuple[int, int]] = set()
+
+    for path in paths:
+        modified = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
+        backup_date = modified.date()
+        iso = backup_date.isocalendar()
+        week_key = (iso.year, iso.week)
+
+        if backup_date not in kept_dates and len(kept_dates) < daily_retention:
+            kept_dates.add(backup_date)
+            keep.add(path)
+        if week_key not in kept_weeks and len(kept_weeks) < weekly_retention:
+            kept_weeks.add(week_key)
+            keep.add(path)
+
+    removed: list[str] = []
+    for path in paths:
+        if path not in keep:
+            path.unlink(missing_ok=True)
+            removed.append(path.name)
+    return removed
+
+
 def backup() -> tuple[int, dict[str, Any]]:
     pg_dump = _tool("pg_dump")
     if pg_dump is None:
         return 1, {"ok": False, "error": "pg_dump is unavailable; PostgreSQL is not installed."}
-    return 1, {
-        "ok": False,
-        "error": "Backup execution is intentionally blocked until database credentials, backup target, and maintenance procedure are configured.",
-        "pg_dump": pg_dump,
+    try:
+        config = validate_files(CONFIG, SCHEMA)
+        password = _read_secret_file("PRODUCTIVITY_DB_PASSWORD_FILE")
+    except (ConfigValidationError, RuntimeError) as exc:
+        return 1, {"ok": False, "error": str(exc)}
+
+    target_value = config.get("backup_target")
+    if not target_value:
+        return 1, {"ok": False, "error": "backup_target is not configured."}
+    target_dir = Path(str(target_value))
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        return 1, {"ok": False, "error": f"Cannot access backup_target: {exc}"}
+
+    local_dir = ROOT / "runtime" / "backups"
+    local_dir.mkdir(parents=True, exist_ok=True)
+    host, port, user, db_name = _database_identity(config)
+    filename = f"productivity_{config['environment']}_{_now_slug()}.dump"
+    local_path = local_dir / filename
+    dump_result = _run_with_password(
+        [
+            pg_dump,
+            "--format=custom",
+            "--no-owner",
+            "--no-privileges",
+            "--host",
+            host,
+            "--port",
+            port,
+            "--username",
+            user,
+            "--file",
+            str(local_path),
+            db_name,
+        ],
+        password,
+    )
+    if dump_result["exit_code"] != 0 or not local_path.is_file():
+        local_path.unlink(missing_ok=True)
+        result = {"ok": False, "stage": "pg_dump", "dump": dump_result}
+        _write_evidence("backup_failed", result)
+        return 1, result
+
+    local_hash = _sha256(local_path)
+    copied_path = target_dir / filename
+    try:
+        shutil.copy2(local_path, copied_path)
+        copied_hash = _sha256(copied_path)
+    except OSError as exc:
+        result = {"ok": False, "stage": "copy", "error": str(exc), "local_path": str(local_path)}
+        _write_evidence("backup_failed", result)
+        return 1, result
+    if copied_hash != local_hash:
+        copied_path.unlink(missing_ok=True)
+        result = {"ok": False, "stage": "verify_copy", "error": "SHA-256 mismatch after copy."}
+        _write_evidence("backup_failed", result)
+        return 1, result
+
+    daily_retention = int(config["backup_daily_retention"])
+    weekly_retention = int(config["backup_weekly_retention"])
+    removed_local = _prune_backups(
+        local_dir,
+        daily_retention=daily_retention,
+        weekly_retention=weekly_retention,
+    )
+    removed_target = _prune_backups(
+        target_dir,
+        daily_retention=daily_retention,
+        weekly_retention=weekly_retention,
+    )
+    result = {
+        "ok": True,
+        "local_path": str(local_path),
+        "independent_copy": str(copied_path),
+        "sha256": local_hash,
+        "daily_retention": daily_retention,
+        "weekly_retention": weekly_retention,
+        "removed_local": removed_local,
+        "removed_target": removed_target,
     }
+    evidence = _write_evidence("backup", result)
+    result["evidence_path"] = str(evidence.relative_to(ROOT))
+    return 0, result
 
 
-def restore_check() -> tuple[int, dict[str, Any]]:
-    pg_restore = _tool("pg_restore")
-    if pg_restore is None:
-        return 1, {"ok": False, "error": "pg_restore is unavailable; PostgreSQL is not installed."}
-    return 1, {
-        "ok": False,
-        "error": "Restore drill is not yet configured. It must use a separate database with restore_mode=true and slack_mode=off.",
-        "pg_restore": pg_restore,
+def restore_check(backup_path: Path | None = None) -> tuple[int, dict[str, Any]]:
+    required_tools = {name: _tool(name) for name in ("createdb", "dropdb", "pg_restore", "psql")}
+    missing = [name for name, path in required_tools.items() if path is None]
+    if missing:
+        return 1, {
+            "ok": False,
+            "error": "PostgreSQL restore tools are unavailable.",
+            "missing": missing,
+        }
+    try:
+        config = validate_files(CONFIG, SCHEMA)
+        if not config["restore_mode"] or config["slack_mode"] != "off":
+            raise RuntimeError("Restore drill requires restore_mode=true and slack_mode=off.")
+        maintenance_user = os.environ.get("PRODUCTIVITY_MAINTENANCE_DB_USER")
+        if not maintenance_user:
+            raise RuntimeError("PRODUCTIVITY_MAINTENANCE_DB_USER is not configured.")
+        password = _read_secret_file("PRODUCTIVITY_MAINTENANCE_DB_PASSWORD_FILE")
+    except (ConfigValidationError, RuntimeError) as exc:
+        return 1, {"ok": False, "error": str(exc)}
+
+    if backup_path is None:
+        candidates = sorted((ROOT / "runtime" / "backups").glob("productivity_*.dump"))
+        if not candidates:
+            return 1, {
+                "ok": False,
+                "error": "No local backup is available for restore verification.",
+            }
+        backup_path = candidates[-1]
+    backup_path = backup_path.resolve()
+    if not backup_path.is_file():
+        return 1, {"ok": False, "error": f"Backup file does not exist: {backup_path}"}
+
+    host, port, _, _ = _database_identity(config)
+    restore_db = f"productivity_restore_{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
+    createdb = str(required_tools["createdb"])
+    dropdb = str(required_tools["dropdb"])
+    pg_restore = str(required_tools["pg_restore"])
+    psql = str(required_tools["psql"])
+    create = _run_with_password(
+        [createdb, "--host", host, "--port", port, "--username", maintenance_user, restore_db],
+        password,
+    )
+    if create["exit_code"] != 0:
+        result = {"ok": False, "stage": "createdb", "result": create}
+        _write_evidence("restore_failed", result)
+        return 1, result
+
+    restore_result: dict[str, Any] | None = None
+    smoke_result: dict[str, Any] | None = None
+    cleanup_result: dict[str, Any] | None = None
+    try:
+        restore_result = _run_with_password(
+            [
+                pg_restore,
+                "--exit-on-error",
+                "--no-owner",
+                "--no-privileges",
+                "--host",
+                host,
+                "--port",
+                port,
+                "--username",
+                maintenance_user,
+                "--dbname",
+                restore_db,
+                str(backup_path),
+            ],
+            password,
+        )
+        if restore_result["exit_code"] == 0:
+            smoke_result = _run_with_password(
+                [
+                    psql,
+                    "--host",
+                    host,
+                    "--port",
+                    port,
+                    "--username",
+                    maintenance_user,
+                    "--dbname",
+                    restore_db,
+                    "--no-psqlrc",
+                    "--tuples-only",
+                    "--command",
+                    "SELECT COUNT(*) FROM django_migrations; SELECT COUNT(*) FROM accounts_user; SELECT COUNT(*) FROM boards_board; SELECT COUNT(*) FROM workitems_task;",
+                ],
+                password,
+            )
+    finally:
+        cleanup_result = _run_with_password(
+            [
+                dropdb,
+                "--if-exists",
+                "--host",
+                host,
+                "--port",
+                port,
+                "--username",
+                maintenance_user,
+                restore_db,
+            ],
+            password,
+        )
+
+    ok = bool(
+        restore_result
+        and restore_result["exit_code"] == 0
+        and smoke_result
+        and smoke_result["exit_code"] == 0
+        and cleanup_result
+        and cleanup_result["exit_code"] == 0
+    )
+    result = {
+        "ok": ok,
+        "backup_path": str(backup_path),
+        "restore_database": restore_db,
+        "restore": restore_result,
+        "smoke": smoke_result,
+        "cleanup": cleanup_result,
     }
+    evidence = _write_evidence("restore_check", result)
+    result["evidence_path"] = str(evidence.relative_to(ROOT))
+    return (0 if ok else 1), result
 
 
 def release_check() -> tuple[int, dict[str, Any]]:
@@ -280,7 +616,8 @@ def main() -> int:
     group.add_argument("--all", action="store_true")
     sub.add_parser("status")
     sub.add_parser("backup")
-    sub.add_parser("restore-check")
+    restore_parser = sub.add_parser("restore-check")
+    restore_parser.add_argument("--backup", type=Path)
     sub.add_parser("release-check")
     args = parser.parse_args()
 
@@ -295,7 +632,7 @@ def main() -> int:
     if args.command == "backup":
         return _emit(*backup())
     if args.command == "restore-check":
-        return _emit(*restore_check())
+        return _emit(*restore_check(args.backup))
     if args.command == "release-check":
         return _emit(*release_check())
     raise AssertionError("Unreachable")

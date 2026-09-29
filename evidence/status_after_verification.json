@@ -1,0 +1,692 @@
+﻿{
+  "blocked": [
+    {
+      "reason": "Independent backup target unavailable. This host has one physical disk and no mapped network share; a same-disk copy is not accepted as an independent backup.",
+      "step_id": "S17"
+    },
+    {
+      "reason": "Pilot service supervision is not configured. A restricted service identity plus reboot, logoff, and forced-failure recovery verification are still required.",
+      "step_id": "S18"
+    },
+    {
+      "reason": "Restore drill depends on a verified independent backup target from S17. Slack remains off and restore-mode guards are implemented, but no independent backup is available to restore.",
+      "step_id": "S19"
+    },
+    {
+      "reason": "Pilot private hostname/CIDR allowlist and independent external availability monitoring have not been supplied or approved. Development remains loopback-only.",
+      "step_id": "S20"
+    },
+    {
+      "reason": "Slack pilot approval has not been granted. slack_mode is intentionally off and no real Slack token or verified recipient mapping is configured.",
+      "step_id": "S21"
+    },
+    {
+      "reason": "Controlled pilot cannot begin until independent backup/restore, supervised services, private-network values, and Slack approval gates are satisfied.",
+      "step_id": "S22"
+    },
+    {
+      "reason": "Final release remains gated by unresolved S17-S22 infrastructure and pilot approvals. The current development build itself passes the full verifier.",
+      "step_id": "S23"
+    }
+  ],
+  "counts": {
+    "BLOCKED": 7,
+    "VERIFIED": 17
+  },
+  "ok": true,
+  "steps": [
+    {
+      "blocking_reason": null,
+      "changed_paths": [
+        "docs/environment.md",
+        "docs/implementation_status.json"
+      ],
+      "evidence_paths": [
+        "docs/environment.md"
+      ],
+      "finding_ids": [],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ11"
+      ],
+      "status": "VERIFIED",
+      "step_id": "S00",
+      "test_ids": [],
+      "verification_command": "manual host inventory reconciliation",
+      "verification_exit_code": 0,
+      "verified_at": "2026-09-29T10:18:00+08:00"
+    },
+    {
+      "blocking_reason": null,
+      "changed_paths": [
+        "docs/dependency_inventory.json",
+        "docs/decisions.md",
+        "requirements.lock.txt",
+        "frontend/package.json",
+        "frontend/package-lock.json"
+      ],
+      "evidence_paths": [
+        "docs/dependency_inventory.json",
+        "requirements.lock.txt",
+        "frontend/package-lock.json"
+      ],
+      "finding_ids": [],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ11"
+      ],
+      "status": "VERIFIED",
+      "step_id": "S01",
+      "test_ids": [],
+      "verification_command": "version and registry metadata checks; npm audit --audit-level=high",
+      "verification_exit_code": 0,
+      "verified_at": "2026-09-29T10:34:00+08:00"
+    },
+    {
+      "blocking_reason": null,
+      "changed_paths": [
+        "backend",
+        "frontend",
+        "config",
+        "ops",
+        "docs"
+      ],
+      "evidence_paths": [
+        "evidence\\verify_s02_20260929T044112Z.json"
+      ],
+      "finding_ids": [],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ11"
+      ],
+      "status": "VERIFIED",
+      "step_id": "S02",
+      "test_ids": [],
+      "verification_command": ".venv\\Scripts\\python.exe ops\\manage.py verify --step S02",
+      "verification_exit_code": 0,
+      "verified_at": "2026-09-29T05:23:20.373923+00:00"
+    },
+    {
+      "blocking_reason": null,
+      "changed_paths": [
+        "backend",
+        "frontend",
+        "config",
+        "ops",
+        "tests"
+      ],
+      "evidence_paths": [
+        "evidence\\verify_s03_20260929T044116Z.json"
+      ],
+      "finding_ids": [],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ11"
+      ],
+      "status": "VERIFIED",
+      "step_id": "S03",
+      "test_ids": [],
+      "verification_command": ".venv\\Scripts\\python.exe ops\\manage.py verify --step S03",
+      "verification_exit_code": 0,
+      "verified_at": "2026-09-29T05:23:20.373923+00:00"
+    },
+    {
+      "blocking_reason": null,
+      "changed_paths": [
+        "backend",
+        "frontend",
+        "config",
+        "ops",
+        "tests"
+      ],
+      "evidence_paths": [
+        "evidence\\verify_s04_20260929T045115Z.json"
+      ],
+      "finding_ids": [
+        "F03"
+      ],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ01",
+        "RQ09",
+        "RQ11"
+      ],
+      "status": "VERIFIED",
+      "step_id": "S04",
+      "test_ids": [],
+      "verification_command": ".venv\\Scripts\\python.exe ops\\manage.py verify --step S04",
+      "verification_exit_code": 0,
+      "verified_at": "2026-09-29T05:23:20.373923+00:00"
+    },
+    {
+      "blocking_reason": null,
+      "changed_paths": [
+        "backend",
+        "frontend",
+        "config",
+        "ops",
+        "tests"
+      ],
+      "evidence_paths": [
+        "evidence\\verify_s05_20260929T050148Z.json"
+      ],
+      "finding_ids": [
+        "F01",
+        "F08"
+      ],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ01",
+        "RQ09",
+        "RQ11"
+      ],
+      "status": "VERIFIED",
+      "step_id": "S05",
+      "test_ids": [
+        "T01",
+        "T02"
+      ],
+      "verification_command": ".venv\\Scripts\\python.exe ops\\manage.py verify --step S05",
+      "verification_exit_code": 0,
+      "verified_at": "2026-09-29T05:23:20.373923+00:00"
+    },
+    {
+      "blocking_reason": null,
+      "changed_paths": [
+        "backend",
+        "frontend",
+        "config",
+        "ops",
+        "tests"
+      ],
+      "evidence_paths": [
+        "evidence\\verify_s06_20260929T050207Z.json"
+      ],
+      "finding_ids": [
+        "F02",
+        "F03"
+      ],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ01",
+        "RQ02",
+        "RQ03",
+        "RQ04",
+        "RQ09",
+        "RQ11"
+      ],
+      "status": "VERIFIED",
+      "step_id": "S06",
+      "test_ids": [
+        "T03",
+        "T04"
+      ],
+      "verification_command": ".venv\\Scripts\\python.exe ops\\manage.py verify --step S06",
+      "verification_exit_code": 0,
+      "verified_at": "2026-09-29T05:23:20.373923+00:00"
+    },
+    {
+      "blocking_reason": null,
+      "changed_paths": [
+        "backend",
+        "frontend",
+        "config",
+        "ops",
+        "tests"
+      ],
+      "evidence_paths": [
+        "evidence\\verify_s07_20260929T050225Z.json"
+      ],
+      "finding_ids": [
+        "F04",
+        "F05"
+      ],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ01",
+        "RQ02",
+        "RQ09",
+        "RQ11"
+      ],
+      "status": "VERIFIED",
+      "step_id": "S07",
+      "test_ids": [
+        "T05",
+        "T06"
+      ],
+      "verification_command": ".venv\\Scripts\\python.exe ops\\manage.py verify --step S07",
+      "verification_exit_code": 0,
+      "verified_at": "2026-09-29T05:23:20.373923+00:00"
+    },
+    {
+      "blocking_reason": null,
+      "changed_paths": [
+        "backend",
+        "frontend",
+        "config",
+        "ops",
+        "tests"
+      ],
+      "evidence_paths": [
+        "evidence\\verify_s08_20260929T052026Z.json"
+      ],
+      "finding_ids": [
+        "F17"
+      ],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ02",
+        "RQ03",
+        "RQ04",
+        "RQ05",
+        "RQ11"
+      ],
+      "status": "VERIFIED",
+      "step_id": "S08",
+      "test_ids": [
+        "T15",
+        "T16"
+      ],
+      "verification_command": ".venv\\Scripts\\python.exe ops\\manage.py verify --step S08",
+      "verification_exit_code": 0,
+      "verified_at": "2026-09-29T05:23:20.373923+00:00"
+    },
+    {
+      "blocking_reason": null,
+      "changed_paths": [
+        "backend",
+        "frontend",
+        "config",
+        "ops",
+        "tests"
+      ],
+      "evidence_paths": [
+        "evidence\\verify_s09_20260929T050245Z.json"
+      ],
+      "finding_ids": [
+        "F09",
+        "F10"
+      ],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ06",
+        "RQ11"
+      ],
+      "status": "VERIFIED",
+      "step_id": "S09",
+      "test_ids": [
+        "T07",
+        "T08"
+      ],
+      "verification_command": ".venv\\Scripts\\python.exe ops\\manage.py verify --step S09",
+      "verification_exit_code": 0,
+      "verified_at": "2026-09-29T05:23:20.373923+00:00"
+    },
+    {
+      "blocking_reason": null,
+      "changed_paths": [
+        "backend",
+        "frontend",
+        "config",
+        "ops",
+        "tests"
+      ],
+      "evidence_paths": [
+        "evidence\\verify_s10_20260929T052051Z.json"
+      ],
+      "finding_ids": [
+        "F11"
+      ],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ06",
+        "RQ11"
+      ],
+      "status": "VERIFIED",
+      "step_id": "S10",
+      "test_ids": [
+        "T09"
+      ],
+      "verification_command": ".venv\\Scripts\\python.exe ops\\manage.py verify --step S10",
+      "verification_exit_code": 0,
+      "verified_at": "2026-09-29T05:23:20.373923+00:00"
+    },
+    {
+      "blocking_reason": null,
+      "changed_paths": [
+        "backend",
+        "frontend",
+        "config",
+        "ops",
+        "tests"
+      ],
+      "evidence_paths": [
+        "evidence\\verify_s11_20260929T050304Z.json"
+      ],
+      "finding_ids": [
+        "F13"
+      ],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ07",
+        "RQ11"
+      ],
+      "status": "VERIFIED",
+      "step_id": "S11",
+      "test_ids": [
+        "T11",
+        "T12"
+      ],
+      "verification_command": ".venv\\Scripts\\python.exe ops\\manage.py verify --step S11",
+      "verification_exit_code": 0,
+      "verified_at": "2026-09-29T05:23:20.373923+00:00"
+    },
+    {
+      "blocking_reason": null,
+      "changed_paths": [
+        "backend",
+        "frontend",
+        "config",
+        "ops",
+        "tests"
+      ],
+      "evidence_paths": [
+        "evidence\\verify_s12_20260929T050322Z.json"
+      ],
+      "finding_ids": [
+        "F08",
+        "F12",
+        "F13"
+      ],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ07",
+        "RQ11"
+      ],
+      "status": "VERIFIED",
+      "step_id": "S12",
+      "test_ids": [
+        "T02",
+        "T10",
+        "T11",
+        "T12"
+      ],
+      "verification_command": ".venv\\Scripts\\python.exe ops\\manage.py verify --step S12",
+      "verification_exit_code": 0,
+      "verified_at": "2026-09-29T05:23:20.373923+00:00"
+    },
+    {
+      "blocking_reason": null,
+      "changed_paths": [
+        "backend",
+        "frontend",
+        "config",
+        "ops",
+        "tests"
+      ],
+      "evidence_paths": [
+        "evidence\\verify_s13_20260929T050805Z.json"
+      ],
+      "finding_ids": [
+        "F06",
+        "F07"
+      ],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ05",
+        "RQ08",
+        "RQ09",
+        "RQ11"
+      ],
+      "status": "VERIFIED",
+      "step_id": "S13",
+      "test_ids": [
+        "T13",
+        "T14"
+      ],
+      "verification_command": ".venv\\Scripts\\python.exe ops\\manage.py verify --step S13",
+      "verification_exit_code": 0,
+      "verified_at": "2026-09-29T05:23:20.373923+00:00"
+    },
+    {
+      "blocking_reason": null,
+      "changed_paths": [
+        "backend",
+        "frontend",
+        "config",
+        "ops",
+        "tests"
+      ],
+      "evidence_paths": [
+        "evidence\\verify_s14_20260929T052116Z.json"
+      ],
+      "finding_ids": [
+        "F17"
+      ],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ08",
+        "RQ11"
+      ],
+      "status": "VERIFIED",
+      "step_id": "S14",
+      "test_ids": [
+        "T13",
+        "T16",
+        "T20"
+      ],
+      "verification_command": ".venv\\Scripts\\python.exe ops\\manage.py verify --step S14",
+      "verification_exit_code": 0,
+      "verified_at": "2026-09-29T05:23:20.373923+00:00"
+    },
+    {
+      "blocking_reason": null,
+      "changed_paths": [
+        "backend",
+        "frontend",
+        "config",
+        "ops",
+        "tests"
+      ],
+      "evidence_paths": [
+        "evidence\\verify_s15_20260929T052142Z.json"
+      ],
+      "finding_ids": [],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ11",
+        "RQ12"
+      ],
+      "status": "VERIFIED",
+      "step_id": "S15",
+      "test_ids": [],
+      "verification_command": ".venv\\Scripts\\python.exe ops\\manage.py verify --step S15",
+      "verification_exit_code": 0,
+      "verified_at": "2026-09-29T05:23:20.373923+00:00"
+    },
+    {
+      "blocking_reason": null,
+      "changed_paths": [
+        "backend",
+        "frontend",
+        "config",
+        "ops",
+        "tests"
+      ],
+      "evidence_paths": [
+        "evidence\\verify_s16_20260929T052208Z.json",
+        "evidence\\runtime_health_20260929T052250Z.json"
+      ],
+      "finding_ids": [
+        "F16"
+      ],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ10",
+        "RQ11"
+      ],
+      "status": "VERIFIED",
+      "step_id": "S16",
+      "test_ids": [
+        "T17"
+      ],
+      "verification_command": ".venv\\Scripts\\python.exe ops\\manage.py verify --step S16",
+      "verification_exit_code": 0,
+      "verified_at": "2026-09-29T05:23:20.373923+00:00"
+    },
+    {
+      "blocking_reason": "Independent backup target unavailable. This host has one physical disk and no mapped network share; a same-disk copy is not accepted as an independent backup.",
+      "changed_paths": [],
+      "evidence_paths": [
+        "docs/operations.md"
+      ],
+      "finding_ids": [
+        "F14",
+        "F18"
+      ],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ10",
+        "RQ11"
+      ],
+      "status": "BLOCKED",
+      "step_id": "S17",
+      "test_ids": [
+        "T18"
+      ],
+      "verification_command": ".venv\\Scripts\\python.exe ops\\manage.py backup",
+      "verification_exit_code": null,
+      "verified_at": null
+    },
+    {
+      "blocking_reason": "Pilot service supervision is not configured. A restricted service identity plus reboot, logoff, and forced-failure recovery verification are still required.",
+      "changed_paths": [],
+      "evidence_paths": [
+        "docs/operations.md"
+      ],
+      "finding_ids": [
+        "F15"
+      ],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ10",
+        "RQ11"
+      ],
+      "status": "BLOCKED",
+      "step_id": "S18",
+      "test_ids": [
+        "T19"
+      ],
+      "verification_command": null,
+      "verification_exit_code": null,
+      "verified_at": null
+    },
+    {
+      "blocking_reason": "Restore drill depends on a verified independent backup target from S17. Slack remains off and restore-mode guards are implemented, but no independent backup is available to restore.",
+      "changed_paths": [],
+      "evidence_paths": [
+        "docs/operations.md"
+      ],
+      "finding_ids": [],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ10",
+        "RQ11"
+      ],
+      "status": "BLOCKED",
+      "step_id": "S19",
+      "test_ids": [
+        "T17",
+        "T18",
+        "T19"
+      ],
+      "verification_command": ".venv\\Scripts\\python.exe ops\\manage.py restore-check",
+      "verification_exit_code": null,
+      "verified_at": null
+    },
+    {
+      "blocking_reason": "Pilot private hostname/CIDR allowlist and independent external availability monitoring have not been supplied or approved. Development remains loopback-only.",
+      "changed_paths": [],
+      "evidence_paths": [
+        "config/Caddyfile.pilot.example",
+        "docs/operations.md"
+      ],
+      "finding_ids": [
+        "F18"
+      ],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ10",
+        "RQ11"
+      ],
+      "status": "BLOCKED",
+      "step_id": "S20",
+      "test_ids": [
+        "T20"
+      ],
+      "verification_command": null,
+      "verification_exit_code": null,
+      "verified_at": null
+    },
+    {
+      "blocking_reason": "Slack pilot approval has not been granted. slack_mode is intentionally off and no real Slack token or verified recipient mapping is configured.",
+      "changed_paths": [],
+      "evidence_paths": [
+        "docs/decisions.md"
+      ],
+      "finding_ids": [],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ11",
+        "RQ12"
+      ],
+      "status": "BLOCKED",
+      "step_id": "S21",
+      "test_ids": [
+        "T21"
+      ],
+      "verification_command": null,
+      "verification_exit_code": null,
+      "verified_at": null
+    },
+    {
+      "blocking_reason": "Controlled pilot cannot begin until independent backup/restore, supervised services, private-network values, and Slack approval gates are satisfied.",
+      "changed_paths": [],
+      "evidence_paths": [
+        "docs/decisions.md",
+        "docs/operations.md"
+      ],
+      "finding_ids": [],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ11",
+        "RQ12"
+      ],
+      "status": "BLOCKED",
+      "step_id": "S22",
+      "test_ids": [],
+      "verification_command": null,
+      "verification_exit_code": null,
+      "verified_at": null
+    },
+    {
+      "blocking_reason": "Final release remains gated by unresolved S17-S22 infrastructure and pilot approvals. The current development build itself passes the full verifier.",
+      "changed_paths": [],
+      "evidence_paths": [
+        "evidence/verify_all_20260929T051902Z.json"
+      ],
+      "finding_ids": [],
+      "git_revision": null,
+      "requirement_ids": [
+        "RQ11",
+        "RQ12"
+      ],
+      "status": "BLOCKED",
+      "step_id": "S23",
+      "test_ids": [],
+      "verification_command": ".venv\\Scripts\\python.exe ops\\manage.py release-check",
+      "verification_exit_code": null,
+      "verified_at": null
+    }
+  ]
+}

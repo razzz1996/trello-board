@@ -1,0 +1,32 @@
+﻿ {
+	email off
+}
+
+# PILOT TEMPLATE - DO NOT START UNTIL private hostname/CIDRs are approved.
+{$PRODUCTIVITY_PRIVATE_HOST} {
+	tls internal
+	encode zstd gzip
+
+	@allowed remote_ip {$PRODUCTIVITY_ALLOWED_CIDRS}
+	respond !@allowed 403
+
+	@api path /api/*
+	handle @api {
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	handle {
+		root * ./frontend/dist
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		X-Frame-Options "DENY"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
+}

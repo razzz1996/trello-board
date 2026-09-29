@@ -1,6 +1,7 @@
 ﻿import { type FormEvent, useState } from "react";
 
 import { commandTask, createTask } from "./api";
+import { TaskWorkspaceExtras } from "./TaskWorkspaceExtras";
 import type { BoardSnapshot, SessionUser, Task } from "./types";
 import { Alert, errorMessage, formatDateTime, isOverdue, Modal, stars, taskDue } from "./ui";
 
@@ -288,6 +289,7 @@ export function ReviewModal({
 export function TaskDetailModal({
   task,
   snapshot,
+  currentUser,
   onClose,
   onChanged,
   onSubmit,
@@ -295,6 +297,7 @@ export function TaskDetailModal({
 }: {
   task: Task;
   snapshot: BoardSnapshot;
+  currentUser: SessionUser;
   onClose: () => void;
   onChanged: () => Promise<void>;
   onSubmit: () => void;
@@ -356,6 +359,13 @@ export function TaskDetailModal({
           </div>
         </section>
       )}
+      <TaskWorkspaceExtras
+        key={`${task.id}:${task.row_version}`}
+        task={task}
+        snapshot={snapshot}
+        currentUser={currentUser}
+        onChanged={onChanged}
+      />
       <div className="modal__actions">
         {["TODO", "IN_PROGRESS", "BLOCKED"].includes(task.column_state) && (
           <button className="button button--primary" type="button" onClick={onSubmit}>Submit result</button>

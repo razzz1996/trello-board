@@ -64,7 +64,13 @@ class TaskCollectionView(APIView):
                 "original_owner",
                 "current_commitment",
             )
-            .prefetch_related("checklist_items", "submissions__review")
+            .prefetch_related(
+                "checklist_items",
+                "comments__author",
+                "comments__history",
+                "change_proposals",
+                "submissions__review",
+            )
             .distinct()
         )
         status_filter = request.query_params.get("status")
@@ -144,6 +150,7 @@ MANAGER_COMMANDS = {
     "reopen_task",
     "cancel_task",
     "restore_cancelled_task",
+    "resolve_change_proposal",
 }
 
 
@@ -303,6 +310,35 @@ class TaskCommandView(APIView):
                 **common,
                 item_id=payload.get("item_id"),
                 checked=bool(payload.get("checked")),
+            )
+        if command == "replace_draft_checklist":
+            items = payload.get("items", [])
+            if not isinstance(items, list):
+                raise DomainError(
+                    "invalid_checklist",
+                    "items must be a list.",
+                )
+            return services.replace_draft_checklist(
+                **common,
+                items=items,
+            )
+        if command == "add_comment":
+            return services.add_comment(
+                **common,
+                body=str(payload.get("body", "")),
+            )
+        if command == "correct_comment":
+            return services.correct_comment(
+                **common,
+                comment_id=payload.get("comment_id"),
+                body=str(payload.get("body", "")),
+            )
+        if command == "resolve_change_proposal":
+            return services.resolve_change_proposal(
+                **common,
+                proposal_id=payload.get("proposal_id"),
+                decision=str(payload.get("decision", "")),
+                reason=str(payload.get("reason", "")),
             )
         if command == "propose_change":
             changes = payload.get("proposed_changes", {})

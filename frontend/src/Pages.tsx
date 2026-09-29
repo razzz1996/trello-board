@@ -1,7 +1,8 @@
-﻿import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { createBoard, getBoards, getTasks } from "./api";
+import { getBoards, getTasks } from "./api";
+import { AdminControls } from "./AdminControls";
 import type { BoardSummary, SessionUser, Task } from "./types";
 import { Alert, errorMessage, formatDateTime, isOverdue, Metric, stars, taskDue } from "./ui";
 
@@ -176,64 +177,5 @@ export function ReportsPage() {
 }
 
 export function AdminPage({ user }: { user: SessionUser }) {
-  const [name, setName] = useState("");
-  const [boards, setBoards] = useState<BoardSummary[]>([]);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const refresh = useCallback(async () => {
-    setBoards(await getBoards());
-  }, []);
-  useEffect(() => {
-    void refresh().catch((caught) => setError(errorMessage(caught)));
-  }, [refresh]);
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setError("");
-    setSuccess("");
-    try {
-      const board = await createBoard(name, [user.id]);
-      setName("");
-      setSuccess(`Created ${board.name}. You are its initial manager.`);
-      await refresh();
-    } catch (caught) {
-      setError(errorMessage(caught));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section>
-      <div className="page-heading"><div><h1>Administration</h1>
-        <p>Board creation is enabled. Account and membership changes remain audited server actions.</p></div></div>
-      {error && <Alert>{error}</Alert>}
-      {success && <Alert kind="success">{success}</Alert>}
-      <div className="two-column">
-        <section className="panel">
-          <h2>Create board</h2>
-          <form className="stack" onSubmit={submit}>
-            <label>Board name
-              <input value={name} onChange={(event) => setName(event.target.value)} required maxLength={200} />
-            </label>
-            <button className="button button--primary" disabled={busy}>
-              {busy ? "Creating…" : "Create board"}
-            </button>
-          </form>
-        </section>
-        <section className="panel">
-          <h2>Existing boards</h2>
-          <ul className="plain-list">
-            {boards.map((board) => (
-              <li key={board.id}><Link to={`/boards/${board.id}`}>{board.name}</Link>
-                <span>rev {board.revision}</span></li>
-            ))}
-          </ul>
-        </section>
-      </div>
-    </section>
-  );
+  return <AdminControls user={user} />;
 }

@@ -59,6 +59,13 @@ class Notification(models.Model):
         on_delete=models.PROTECT,
         related_name="notifications",
     )
+    report_snapshot = models.ForeignKey(
+        "reports.ReportSnapshot",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="notifications",
+    )
     kind = models.CharField(max_length=64)
     scheduled_for = models.DateTimeField()
     observed_at = models.DateTimeField(null=True, blank=True)
@@ -77,3 +84,37 @@ class Notification(models.Model):
             models.Index(fields=["recipient", "status", "scheduled_for"]),
             models.Index(fields=["task", "kind"]),
         ]
+
+
+class SlackPilotApproval(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="slack_pilot_approvals",
+    )
+    destination_generation = models.PositiveIntegerField()
+    sample_hash = models.CharField(max_length=64)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="+",
+    )
+    approved_at = models.DateTimeField(auto_now_add=True)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["recipient", "destination_generation"],
+                name="uq_slack_pilot_recipient_generation",
+            )
+        ]
+        indexes = [models.Index(fields=["recipient", "active"])]
+
+
+class WorkerHeartbeat(models.Model):
+    name = models.CharField(max_length=64, primary_key=True)
+    last_seen_at = models.DateTimeField()
+    process_id = models.PositiveIntegerField(null=True, blank=True)
+    details = models.JSONField(default=dict)

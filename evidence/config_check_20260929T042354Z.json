@@ -1,0 +1,7 @@
+﻿{
+  "config": "C:\\Users\\PC 19\\Desktop\\PRODUCTIVITY WEBSITE\\config\\deployment.json",
+  "environment": "development",
+  "ok": true,
+  "restore_mode": false,
+  "slack_mode": "off"
+}

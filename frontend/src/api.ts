@@ -1,7 +1,15 @@
-﻿import type {
+import type {
+  AdminUser,
   ApiErrorBody,
+  BoardMembershipAdmin,
   BoardSnapshot,
   BoardSummary,
+  HealthDetail,
+  NotificationRow,
+  ReportSummary,
+  Role,
+  ScheduleOccurrencePreview,
+  ScheduleRow,
   SessionUser,
   Task,
 } from "./types";
@@ -148,8 +156,32 @@ export async function createBoard(name: string, managerUserIds: string[]): Promi
   );
 }
 
-export async function getBoardSnapshot(boardId: string): Promise<BoardSnapshot> {
-  return request<BoardSnapshot>(`/api/v1/boards/${encodeURIComponent(boardId)}/snapshot`);
+export async function getBoardSnapshot(
+  boardId: string,
+  knownRevision?: number,
+): Promise<BoardSnapshot | null> {
+  const headers = new Headers({ Accept: "application/json" });
+  if (knownRevision !== undefined) {
+    headers.set("If-None-Match", `"board-${boardId}-${knownRevision}"`);
+  }
+  const response = await fetch(
+    `/api/v1/boards/${encodeURIComponent(boardId)}/snapshot`,
+    {
+      credentials: "same-origin",
+      headers,
+    },
+  );
+  if (response.status === 304) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new ApiError(
+      response.status,
+      await parseError(response),
+      response.statusText || "Unable to load board",
+    );
+  }
+  return (await response.json()) as BoardSnapshot;
 }
 
 export async function getTasks(query = ""): Promise<Task[]> {
@@ -188,4 +220,176 @@ export async function commandTask(
     },
     { idempotentMutation: true },
   );
+}
+
+
+export async function getAdminUsers(): Promise<AdminUser[]> {
+  return request<AdminUser[]>("/api/v1/admin/users");
+}
+
+export async function createAdminUser(input: {
+  username: string;
+  temporary_password: string;
+  is_admin: boolean;
+  reason: string;
+}): Promise<AdminUser> {
+  return request<AdminUser>(
+    "/api/v1/admin/users",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    { idempotentMutation: true },
+  );
+}
+
+export async function commandAdminUser(
+  userId: string,
+  command: "reset_password" | "disable" | "enable" | "set_admin",
+  payload: Record<string, unknown>,
+): Promise<AdminUser> {
+  return request<AdminUser>(
+    `/api/v1/admin/users/${encodeURIComponent(userId)}/commands/${command}`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    { idempotentMutation: true },
+  );
+}
+
+export async function getBoardMemberships(
+  boardId: string,
+): Promise<BoardMembershipAdmin[]> {
+  return request<BoardMembershipAdmin[]>(
+    `/api/v1/boards/${encodeURIComponent(boardId)}/memberships`,
+  );
+}
+
+export async function addBoardMembership(
+  boardId: string,
+  userId: string,
+  role: Role,
+  reason: string,
+): Promise<BoardMembershipAdmin> {
+  return request<BoardMembershipAdmin>(
+    `/api/v1/boards/${encodeURIComponent(boardId)}/memberships`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        user_id: userId,
+        role,
+        reason,
+      }),
+    },
+    { idempotentMutation: true },
+  );
+}
+
+export async function commandBoardMembership(
+  boardId: string,
+  userId: string,
+  command: "set_role" | "remove",
+  payload: Record<string, unknown>,
+): Promise<BoardMembershipAdmin> {
+  return request<BoardMembershipAdmin>(
+    `/api/v1/boards/${encodeURIComponent(boardId)}/memberships/${encodeURIComponent(
+      userId,
+    )}/commands/${command}`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    { idempotentMutation: true },
+  );
+}
+
+export async function getNotifications(unreadOnly = false): Promise<NotificationRow[]> {
+  return request<NotificationRow[]>(
+    `/api/v1/notifications${unreadOnly ? "?unread=1" : ""}`,
+  );
+}
+
+export async function markNotificationRead(id: string): Promise<NotificationRow> {
+  return request<NotificationRow>(
+    `/api/v1/notifications/${encodeURIComponent(id)}/read`,
+    { method: "POST", body: JSON.stringify({}) },
+    { idempotentMutation: true },
+  );
+}
+
+export async function getReports(): Promise<ReportSummary[]> {
+  return request<ReportSummary[]>("/api/v1/reports");
+}
+
+export async function createReport(reportDate: string): Promise<ReportSummary> {
+  return request<ReportSummary>(
+    "/api/v1/reports",
+    {
+      method: "POST",
+      body: JSON.stringify({ report_date: reportDate }),
+    },
+    { idempotentMutation: true },
+  );
+}
+
+export async function getReport(id: string): Promise<ReportSummary> {
+  return request<ReportSummary>(
+    `/api/v1/reports/${encodeURIComponent(id)}`,
+  );
+}
+
+export async function getSchedules(boardId?: string): Promise<ScheduleRow[]> {
+  const query = boardId ? `?board=${encodeURIComponent(boardId)}` : "";
+  return request<ScheduleRow[]>(`/api/v1/schedules${query}`);
+}
+
+export async function createSchedule(input: {
+  board_id: string;
+  name: string;
+  timezone: string;
+}): Promise<ScheduleRow> {
+  return request<ScheduleRow>(
+    "/api/v1/schedules",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    { idempotentMutation: true },
+  );
+}
+
+export async function previewSchedule(input: {
+  board_id: string;
+  rule: Record<string, unknown>;
+  after: string;
+  pauses?: Array<Record<string, unknown>>;
+}): Promise<ScheduleOccurrencePreview[]> {
+  const result = await request<{ occurrences: ScheduleOccurrencePreview[] }>(
+    "/api/v1/schedules/preview",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
+  return result.occurrences;
+}
+
+export async function commandSchedule(
+  scheduleId: string,
+  command: "publish" | "revise" | "pause" | "resume",
+  payload: Record<string, unknown>,
+): Promise<ScheduleRow> {
+  return request<ScheduleRow>(
+    `/api/v1/schedules/${encodeURIComponent(scheduleId)}/commands/${command}`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    { idempotentMutation: true },
+  );
+}
+
+export async function getHealthDetail(): Promise<HealthDetail> {
+  return request<HealthDetail>("/api/v1/health/detail");
 }

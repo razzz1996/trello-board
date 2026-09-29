@@ -7,16 +7,20 @@ from urllib.parse import urlparse
 
 from boards.models import Board, BoardColumn, BoardMembership
 from boards.permissions import require_board_manager, require_board_member
+from core.clock import now
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import F, Max
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from .errors import DomainError
 from .models import (
     AuditEvent,
     ChangeProposal,
     ChecklistItem,
+    Comment,
+    CommentEditHistory,
     CommitmentRevision,
     Review,
     Submission,
@@ -66,7 +70,7 @@ def _board_and_task_for_update(task_id) -> tuple[Board, Task]:
         raise DomainError("not_found", "Task not found.", status=404)
     board = Board.objects.select_for_update().get(pk=board_id)
     task = (
-        Task.objects.select_for_update()
+        Task.objects.select_for_update(of=("self",))
         .select_related("column", "current_commitment", "current_owner")
         .get(pk=task_id, board=board)
     )
@@ -367,7 +371,7 @@ def commit_task(
         task.current_owner = owner
         task.original_owner = owner
         task.current_commitment = commitment
-        task.committed_at = timezone.now()
+        task.committed_at = now()
         task.row_version += 1
         board.revision += 1
         task.save()
@@ -381,6 +385,9 @@ def commit_task(
             before=before,
             after=_serialize_task(task),
         )
+        from notifications.obligations import schedule_commitment_notifications
+
+        schedule_commitment_notifications(task)
         return task
 
 
@@ -490,6 +497,8 @@ def propose_change(
     if not reason.strip():
         raise DomainError("reason_required", "A reason is required.")
     allowed = {"owner_id", "priority", "due_at", "acceptance_criteria", "required_checklist"}
+    if not proposed_changes:
+        raise DomainError("invalid_change", "At least one proposed change is required.")
     unknown = set(proposed_changes) - allowed
     if unknown:
         raise DomainError("invalid_change", f"Unsupported proposed fields: {sorted(unknown)}")
@@ -525,13 +534,28 @@ def _replace_required_checklist(task: Task, values: list[dict[str, Any]]) -> Non
     if not isinstance(values, list):
         raise DomainError("invalid_checklist", "Required checklist must be a list.")
     Task.objects.select_for_update().get(pk=task.pk)
-    existing_non_required = list(task.checklist_items.filter(required=False).order_by("position"))
-    task.checklist_items.filter(required=True).delete()
-    base = len(existing_non_required)
-    for index, value in enumerate(values):
+    existing_non_required = list(
+        task.checklist_items.select_for_update().filter(required=False).order_by("position")
+    )
+    normalized: list[str] = []
+    for value in values:
+        if not isinstance(value, dict):
+            raise DomainError(
+                "invalid_checklist",
+                "Required checklist items must be objects.",
+            )
         text = str(value.get("text", "")).strip()
         if not text:
             raise DomainError("invalid_checklist", "Required checklist items need text.")
+        normalized.append(text[:500])
+
+    task.checklist_items.filter(required=True).delete()
+    for position, item in enumerate(existing_non_required):
+        if item.position != position:
+            item.position = position
+            item.save(update_fields=["position"])
+    base = len(existing_non_required)
+    for index, text in enumerate(normalized):
         ChecklistItem.objects.create(
             task=task,
             text=text[:500],
@@ -564,11 +588,6 @@ def revise_commitment(
             raise DomainError(
                 "not_committed", "Draft tasks do not have commitments to revise.", status=409
             )
-        if task.column.state == BoardColumn.State.DONE:
-            raise DomainError(
-                "reopen_required", "Reopen a done task before revising its commitment.", status=409
-            )
-
         current = task.current_commitment
         owner = _eligible_owner(board, owner_id) if owner_id is not None else current.owner
         chosen_due = due_at if due_at is not None else current.due_at
@@ -585,7 +604,7 @@ def revise_commitment(
             raise DomainError("criteria_required", "Acceptance criteria cannot be empty.")
 
         pending = (
-            Submission.objects.select_for_update()
+            Submission.objects.select_for_update(of=("self",))
             .filter(task=task, is_current=True, review__isnull=True)
             .first()
         )
@@ -630,6 +649,9 @@ def revise_commitment(
             before=before,
             after=_serialize_task(task),
         )
+        from notifications.obligations import schedule_commitment_notifications
+
+        schedule_commitment_notifications(task)
         return task
 
 
@@ -689,7 +711,7 @@ def submit_result(
         owner = task.current_owner
         if owner is None:
             raise DomainError("invalid_owner", "Committed task owner is unavailable.", status=409)
-        Submission.objects.create(
+        submission = Submission.objects.create(
             task=task,
             commitment=commitment,
             accountable_owner=owner,
@@ -717,6 +739,9 @@ def submit_result(
         task.save(update_fields=["column", "position", "row_version", "updated_at"])
         board.save(update_fields=["revision", "updated_at"])
         _audit(board, task, actor, "submit_result", before=before, after=_serialize_task(task))
+        from notifications.obligations import schedule_review_requests
+
+        schedule_review_requests(task, submission)
         return task
 
 
@@ -844,7 +869,7 @@ def cancel_task(
             raise DomainError("already_cancelled", "Task is already cancelled.", status=409)
         before = _serialize_task(task)
         task.is_cancelled = True
-        task.cancelled_at = timezone.now()
+        task.cancelled_at = now()
         task.cancelled_reason = reason
         task.row_version += 1
         board.revision += 1
@@ -903,5 +928,310 @@ def restore_cancelled_task(
             reason=reason,
             before=before,
             after=_serialize_task(task),
+        )
+        return task
+
+
+def replace_draft_checklist(
+    *,
+    actor,
+    task_id,
+    expected_version: int,
+    expected_board_revision: int,
+    items: list[dict[str, Any]],
+) -> Task:
+    if not isinstance(items, list) or len(items) > 100:
+        raise DomainError(
+            "invalid_checklist",
+            "Checklist must be a list with at most 100 items.",
+        )
+    normalized: list[dict[str, Any]] = []
+    for value in items:
+        if not isinstance(value, dict):
+            raise DomainError("invalid_checklist", "Each checklist item must be an object.")
+        text = str(value.get("text", "")).strip()
+        if not text:
+            raise DomainError("invalid_checklist", "Checklist items require text.")
+        normalized.append(
+            {
+                "text": text[:500],
+                "required": bool(value.get("required", False)),
+            }
+        )
+
+    with transaction.atomic():
+        board, task = _board_and_task_for_update(task_id)
+        require_board_member(actor, board.id, for_update=True)
+        _require_expected(task, board, expected_version, expected_board_revision)
+        if task.committed_at is not None:
+            raise DomainError(
+                "protected_commitment",
+                "Checklist structure is frozen after commitment. Use revise_commitment.",
+                status=409,
+            )
+        before = [
+            {
+                "id": str(item.id),
+                "text": item.text,
+                "required": item.required,
+                "position": item.position,
+            }
+            for item in task.checklist_items.order_by("position")
+        ]
+        task.checklist_items.all().delete()
+        for index, value in enumerate(normalized):
+            ChecklistItem.objects.create(
+                task=task,
+                text=value["text"],
+                required=value["required"],
+                position=index,
+                checked=False,
+            )
+        _bump(board, task)
+        _audit(
+            board,
+            task,
+            actor,
+            "replace_draft_checklist",
+            before={"items": before},
+            after={
+                "items": [
+                    {
+                        "id": str(item.id),
+                        "text": item.text,
+                        "required": item.required,
+                        "position": item.position,
+                    }
+                    for item in task.checklist_items.order_by("position")
+                ]
+            },
+        )
+        return task
+
+
+def add_comment(
+    *,
+    actor,
+    task_id,
+    expected_version: int,
+    expected_board_revision: int,
+    body: str,
+) -> Task:
+    cleaned = body.strip()
+    if not cleaned:
+        raise DomainError("comment_required", "Comment text is required.")
+    if len(cleaned) > 10000:
+        raise DomainError("comment_too_long", "Comment cannot exceed 10000 characters.")
+
+    with transaction.atomic():
+        board, task = _board_and_task_for_update(task_id)
+        require_board_member(actor, board.id, for_update=True)
+        _require_expected(task, board, expected_version, expected_board_revision)
+        comment = Comment.objects.create(task=task, author=actor, body=cleaned)
+        _bump(board, task)
+        _audit(
+            board,
+            task,
+            actor,
+            "add_comment",
+            after={"comment_id": str(comment.id)},
+        )
+        return task
+
+
+def correct_comment(
+    *,
+    actor,
+    task_id,
+    expected_version: int,
+    expected_board_revision: int,
+    comment_id,
+    body: str,
+) -> Task:
+    cleaned = body.strip()
+    if not cleaned:
+        raise DomainError("comment_required", "Comment text is required.")
+    if len(cleaned) > 10000:
+        raise DomainError("comment_too_long", "Comment cannot exceed 10000 characters.")
+
+    with transaction.atomic():
+        board, task = _board_and_task_for_update(task_id)
+        membership = require_board_member(actor, board.id, for_update=True)
+        _require_expected(task, board, expected_version, expected_board_revision)
+        comment = Comment.objects.select_for_update().filter(pk=comment_id, task=task).first()
+        if comment is None:
+            raise DomainError("not_found", "Comment not found.", status=404)
+        if comment.author_id != actor.id and membership.role != BoardMembership.Role.MANAGER:
+            raise DomainError(
+                "comment_correction_forbidden",
+                "Only the comment author or a board manager can correct it.",
+                status=403,
+            )
+        if comment.body == cleaned:
+            return task
+        previous = comment.body
+        CommentEditHistory.objects.create(
+            comment=comment,
+            editor=actor,
+            previous_body=previous,
+            replacement_body=cleaned,
+        )
+        comment.body = cleaned
+        comment.corrected_at = now()
+        comment.save(update_fields=["body", "corrected_at"])
+        _bump(board, task)
+        _audit(
+            board,
+            task,
+            actor,
+            "correct_comment",
+            before={"comment_id": str(comment.id)},
+            after={"comment_id": str(comment.id), "corrected": True},
+        )
+        return task
+
+
+def resolve_change_proposal(
+    *,
+    actor,
+    task_id,
+    expected_version: int,
+    expected_board_revision: int,
+    proposal_id,
+    decision: str,
+    reason: str,
+) -> Task:
+    if decision not in {
+        ChangeProposal.Status.ACCEPTED,
+        ChangeProposal.Status.DECLINED,
+    }:
+        raise DomainError(
+            "invalid_decision",
+            "Proposal decision must be ACCEPTED or DECLINED.",
+        )
+    if not reason.strip():
+        raise DomainError("reason_required", "A proposal resolution requires a reason.")
+
+    if decision == ChangeProposal.Status.ACCEPTED:
+        proposal = ChangeProposal.objects.filter(
+            pk=proposal_id,
+            task_id=task_id,
+            status=ChangeProposal.Status.PENDING,
+        ).first()
+        if proposal is None:
+            raise DomainError(
+                "proposal_not_found",
+                "Pending proposal not found.",
+                status=404,
+            )
+        changes = dict(proposal.proposed_changes)
+        due_at = None
+        if "due_at" in changes:
+            raw_due = changes.get("due_at")
+            if not isinstance(raw_due, str):
+                raise DomainError(
+                    "invalid_datetime",
+                    "Proposed due_at must be an ISO datetime.",
+                )
+            due_at = parse_datetime(raw_due)
+            if due_at is None:
+                raise DomainError("invalid_datetime", "Proposed due_at is invalid.")
+        priority = None
+        if "priority" in changes:
+            try:
+                priority = int(changes["priority"])
+            except (TypeError, ValueError) as exc:
+                raise DomainError(
+                    "invalid_priority",
+                    "Proposed priority must be 1, 2, or 3.",
+                ) from exc
+        required_checklist = changes.get("required_checklist")
+        if required_checklist is not None and not isinstance(required_checklist, list):
+            raise DomainError(
+                "invalid_checklist",
+                "Proposed required_checklist must be a list.",
+            )
+
+        with transaction.atomic():
+            task = revise_commitment(
+                actor=actor,
+                task_id=task_id,
+                expected_version=expected_version,
+                expected_board_revision=expected_board_revision,
+                reason=reason,
+                owner_id=changes.get("owner_id"),
+                due_at=due_at,
+                priority=priority,
+                acceptance_criteria=changes.get("acceptance_criteria"),
+                required_checklist=required_checklist,
+            )
+            locked = (
+                ChangeProposal.objects.select_for_update()
+                .filter(
+                    pk=proposal_id,
+                    task_id=task_id,
+                    status=ChangeProposal.Status.PENDING,
+                )
+                .first()
+            )
+            if locked is None:
+                raise DomainError(
+                    "proposal_changed",
+                    "Proposal changed while it was being accepted.",
+                    status=409,
+                )
+            locked.status = ChangeProposal.Status.ACCEPTED
+            locked.resolved_by = actor
+            locked.resolution_reason = reason[:2000]
+            locked.resolved_at = now()
+            locked.save(
+                update_fields=[
+                    "status",
+                    "resolved_by",
+                    "resolution_reason",
+                    "resolved_at",
+                ]
+            )
+            return task
+
+    with transaction.atomic():
+        board, task = _board_and_task_for_update(task_id)
+        require_board_manager(actor, board.id, for_update=True)
+        _require_expected(task, board, expected_version, expected_board_revision)
+        proposal = (
+            ChangeProposal.objects.select_for_update()
+            .filter(
+                pk=proposal_id,
+                task=task,
+                status=ChangeProposal.Status.PENDING,
+            )
+            .first()
+        )
+        if proposal is None:
+            raise DomainError(
+                "proposal_not_found",
+                "Pending proposal not found.",
+                status=404,
+            )
+        proposal.status = ChangeProposal.Status.DECLINED
+        proposal.resolved_by = actor
+        proposal.resolution_reason = reason[:2000]
+        proposal.resolved_at = now()
+        proposal.save(
+            update_fields=[
+                "status",
+                "resolved_by",
+                "resolution_reason",
+                "resolved_at",
+            ]
+        )
+        _bump(board, task)
+        _audit(
+            board,
+            task,
+            actor,
+            "decline_change_proposal",
+            reason=reason,
+            after={"proposal_id": str(proposal.id)},
         )
         return task

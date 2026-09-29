@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 
+from core.clock import now as clock_now
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -150,7 +151,7 @@ class Submission(models.Model):
     target_value = models.DecimalField(max_digits=18, decimal_places=4, null=True, blank=True)
     actual_value = models.DecimalField(max_digits=18, decimal_places=4, null=True, blank=True)
     unit = models.CharField(max_length=64, blank=True)
-    submitted_at = models.DateTimeField(auto_now_add=True)
+    submitted_at = models.DateTimeField(default=clock_now, editable=False)
     is_current = models.BooleanField(default=True)
 
     class Meta:
@@ -175,7 +176,7 @@ class Review(models.Model):
     )
     decision = models.CharField(max_length=16, choices=Decision.choices)
     feedback = models.TextField(max_length=10000, blank=True)
-    reviewed_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(default=clock_now, editable=False)
 
 
 class ChangeProposal(models.Model):

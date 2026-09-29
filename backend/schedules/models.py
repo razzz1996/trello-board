@@ -45,7 +45,7 @@ class SchedulePause(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     schedule = models.ForeignKey(Schedule, on_delete=models.PROTECT, related_name="pauses")
     start_base_date = models.DateField()
-    end_base_date = models.DateField()
+    end_base_date = models.DateField(null=True, blank=True)
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     reason = models.TextField(max_length=2000)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -53,7 +53,10 @@ class SchedulePause(models.Model):
     class Meta:
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(end_base_date__gt=models.F("start_base_date")),
+                condition=(
+                    models.Q(end_base_date__isnull=True)
+                    | models.Q(end_base_date__gt=models.F("start_base_date"))
+                ),
                 name="schedule_pause_end_after_start",
             )
         ]

@@ -1,0 +1,27 @@
+﻿ {
+	email off
+	auto_https disable_redirects
+}
+
+http://127.0.0.1:8080 {
+	bind 127.0.0.1
+	encode zstd gzip
+	@api path /api/*
+	handle @api {
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	handle {
+		root * ./frontend/dist
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		-Server
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		X-Frame-Options "DENY"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
+}

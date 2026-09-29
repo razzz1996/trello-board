@@ -9,6 +9,20 @@ export interface SessionUser {
   session_generation: number;
 }
 
+export interface AdminUser extends SessionUser {
+  is_active: boolean;
+  disabled_at: string | null;
+  slack_destination_generation: number;
+  slack_verified: boolean;
+}
+
+export interface BoardMembershipAdmin {
+  user_id: string;
+  username: string;
+  role: Role;
+  is_active: boolean;
+}
+
 export interface BoardSummary {
   id: string;
   name: string;
@@ -51,6 +65,36 @@ export interface Review {
   reviewed_at: string;
 }
 
+export interface CommentEditHistory {
+  id: string;
+  editor_id: string;
+  previous_body: string;
+  replacement_body: string;
+  edited_at: string;
+}
+
+export interface Comment {
+  id: string;
+  author_id: string;
+  author_username: string;
+  body: string;
+  created_at: string;
+  corrected_at: string | null;
+  history: CommentEditHistory[];
+}
+
+export interface ChangeProposal {
+  id: string;
+  proposer_id: string;
+  proposed_changes: Record<string, unknown>;
+  reason: string;
+  status: "PENDING" | "ACCEPTED" | "DECLINED";
+  resolved_by_id: string | null;
+  resolution_reason: string;
+  created_at: string;
+  resolved_at: string | null;
+}
+
 export interface Submission {
   id: string;
   commitment_id: string;
@@ -86,6 +130,8 @@ export interface Task {
   cancelled_at: string | null;
   cancelled_reason: string;
   checklist_items: ChecklistItem[];
+  comments: Comment[];
+  change_proposals: ChangeProposal[];
   submissions: Submission[];
   created_at: string;
   updated_at: string;
@@ -107,9 +153,96 @@ export interface BoardSnapshot {
   columns: BoardColumn[];
 }
 
+export interface NotificationRow {
+  id: string;
+  kind: string;
+  task_id: string | null;
+  report_id: string | null;
+  scheduled_for: string;
+  observed_at: string | null;
+  status: string;
+  message: string;
+  read_at: string | null;
+}
+
+export interface ReportSummary {
+  id: string;
+  report_date: string;
+  scheduled_for: string;
+  observation_started_at: string;
+  generated_at: string;
+  timezone: string;
+  definition_version: number;
+  generation: number;
+  delayed: boolean;
+  metrics: Record<string, unknown>;
+  scope_board_ids: string[];
+  rows?: Array<Record<string, unknown>>;
+}
+
+export interface ScheduleRevision {
+  id: string;
+  revision: number;
+  rule: Record<string, unknown>;
+  template_fields: Record<string, unknown>;
+  effective_base_period: string;
+  reason: string;
+  published_at: string;
+}
+
+export interface ScheduleRow {
+  id: string;
+  board_id: string;
+  name: string;
+  timezone: string;
+  active: boolean;
+  generation: number;
+  cursor_period_key: string;
+  current_revision: ScheduleRevision | null;
+  paused: boolean;
+}
+
+export interface ScheduleOccurrencePreview {
+  period_key: string;
+  base_release_date: string;
+  adjusted_release_date: string;
+  adjusted_due_date: string;
+  release_at: string;
+  due_at: string;
+  explanations: string[];
+}
+
 export interface ApiErrorBody {
   code: string;
   message: string;
   field_errors: Record<string, string[]>;
   request_id: string | null;
+}
+
+
+export interface HealthDetail {
+  observed_at: string;
+  heartbeats: Record<
+    string,
+    {
+      last_seen_at: string | null;
+      age_seconds: number | null;
+      stale: boolean;
+    }
+  >;
+  queue: {
+    oldest_ready_age_seconds: number;
+    failed: number;
+    unknown: number;
+  };
+  disk: {
+    free_bytes: number;
+    total_bytes: number;
+    free_percent: number;
+  };
+  backup: {
+    status: string;
+    age_hours: number | null;
+  };
+  warnings: string[];
 }
