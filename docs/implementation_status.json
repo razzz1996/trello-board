@@ -1,0 +1,589 @@
+﻿[
+    {
+        "step_id":  "S00",
+        "status":  "VERIFIED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+                              "docs/environment.md",
+                              "docs/implementation_status.json"
+                          ],
+        "verification_command":  "manual host inventory reconciliation",
+        "verification_exit_code":  0,
+        "verified_at":  "2026-09-29T10:18:00+08:00",
+        "evidence_paths":  [
+                               "docs/environment.md"
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S01",
+        "status":  "VERIFIED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+                              "docs/dependency_inventory.json",
+                              "docs/decisions.md",
+                              "requirements.lock.txt",
+                              "frontend/package.json",
+                              "frontend/package-lock.json"
+                          ],
+        "verification_command":  "version and registry metadata checks; npm audit --audit-level=high",
+        "verification_exit_code":  0,
+        "verified_at":  "2026-09-29T10:34:00+08:00",
+        "evidence_paths":  [
+                               "docs/dependency_inventory.json",
+                               "requirements.lock.txt",
+                               "frontend/package-lock.json"
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S02",
+        "status":  "IN_PROGRESS",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+                              "backend",
+                              "frontend",
+                              "config",
+                              "ops",
+                              "docs"
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  "PostgreSQL 18.6 not installed; owner must enter a non-invented database superuser/service credential through the installer before PostgreSQL verification can pass."
+    },
+    {
+        "step_id":  "S03",
+        "status":  "NOT_STARTED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S04",
+        "status":  "NOT_STARTED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S05",
+        "status":  "NOT_STARTED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S06",
+        "status":  "NOT_STARTED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S07",
+        "status":  "NOT_STARTED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S08",
+        "status":  "NOT_STARTED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S09",
+        "status":  "NOT_STARTED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S10",
+        "status":  "NOT_STARTED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S11",
+        "status":  "NOT_STARTED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S12",
+        "status":  "NOT_STARTED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S13",
+        "status":  "NOT_STARTED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S14",
+        "status":  "NOT_STARTED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S15",
+        "status":  "NOT_STARTED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S16",
+        "status":  "NOT_STARTED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S17",
+        "status":  "NOT_STARTED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S18",
+        "status":  "NOT_STARTED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S19",
+        "status":  "NOT_STARTED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S20",
+        "status":  "NOT_STARTED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S21",
+        "status":  "NOT_STARTED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S22",
+        "status":  "NOT_STARTED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  null
+    },
+    {
+        "step_id":  "S23",
+        "status":  "NOT_STARTED",
+        "requirement_ids":  [
+
+                            ],
+        "finding_ids":  [
+
+                        ],
+        "test_ids":  [
+
+                     ],
+        "git_revision":  null,
+        "changed_paths":  [
+
+                          ],
+        "verification_command":  null,
+        "verification_exit_code":  null,
+        "verified_at":  null,
+        "evidence_paths":  [
+
+                           ],
+        "blocking_reason":  null
+    }
+]

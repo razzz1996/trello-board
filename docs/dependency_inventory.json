@@ -1,0 +1,122 @@
+﻿{
+    "generated_at":  "2026-09-29T10:00:00+08:00",
+    "architecture":  "React + TypeScript / Django + DRF / PostgreSQL / Python worker / Waitress / Caddy",
+    "runtime":  [
+                    {
+                        "name":  "Python",
+                        "version":  "3.14.7",
+                        "source":  "python.org via winget",
+                        "license":  "PSF",
+                        "status":  "installed"
+                    },
+                    {
+                        "name":  "Node.js",
+                        "version":  "24.19.0",
+                        "source":  "nodejs.org",
+                        "license":  "open-source",
+                        "status":  "installed"
+                    },
+                    {
+                        "name":  "Git for Windows",
+                        "version":  "2.55.0.5",
+                        "source":  "gitforwindows.org via winget",
+                        "license":  "GPL-2.0",
+                        "status":  "installed"
+                    },
+                    {
+                        "name":  "Caddy",
+                        "version":  "2.11.4",
+                        "source":  "github.com/caddyserver/caddy via winget",
+                        "license":  "Apache-2.0",
+                        "status":  "installed"
+                    },
+                    {
+                        "name":  "PostgreSQL",
+                        "version":  "18.6",
+                        "source":  "postgresql.org / EDB Windows installer",
+                        "license":  "PostgreSQL",
+                        "status":  "selected_not_installed"
+                    }
+                ],
+    "backend":  [
+                    {
+                        "name":  "Django",
+                        "version":  "5.2.17",
+                        "source":  "PyPI",
+                        "license":  "BSD-3-Clause"
+                    },
+                    {
+                        "name":  "djangorestframework",
+                        "version":  "3.18.1",
+                        "source":  "PyPI",
+                        "license":  "BSD"
+                    },
+                    {
+                        "name":  "psycopg[binary]",
+                        "version":  "3.3.6",
+                        "source":  "PyPI",
+                        "license":  "LGPL-3.0-or-later"
+                    },
+                    {
+                        "name":  "waitress",
+                        "version":  "3.0.2",
+                        "source":  "PyPI",
+                        "license":  "ZPL-2.1"
+                    },
+                    {
+                        "name":  "drf-spectacular",
+                        "version":  "0.30.0",
+                        "source":  "PyPI",
+                        "license":  "BSD-3-Clause"
+                    },
+                    {
+                        "name":  "jsonschema",
+                        "version":  "4.26.0",
+                        "source":  "PyPI",
+                        "license":  "MIT"
+                    }
+                ],
+    "frontend":  [
+                     {
+                         "name":  "react",
+                         "version":  "19.3.0",
+                         "license":  "MIT"
+                     },
+                     {
+                         "name":  "react-dom",
+                         "version":  "19.3.0",
+                         "license":  "MIT"
+                     },
+                     {
+                         "name":  "react-router-dom",
+                         "version":  "7.18.4",
+                         "license":  "MIT"
+                     },
+                     {
+                         "name":  "@dnd-kit/core",
+                         "version":  "6.3.1",
+                         "license":  "MIT"
+                     },
+                     {
+                         "name":  "@dnd-kit/sortable",
+                         "version":  "10.0.0",
+                         "license":  "MIT"
+                     },
+                     {
+                         "name":  "vite",
+                         "version":  "8.3.1",
+                         "license":  "MIT"
+                     },
+                     {
+                         "name":  "typescript",
+                         "version":  "7.0.2",
+                         "license":  "Apache-2.0"
+                     }
+                 ],
+    "policy":  {
+                   "paid_dependencies":  false,
+                   "cloud_required":  false,
+                   "slack_live":  false,
+                   "public_exposure":  false
+               }
+}

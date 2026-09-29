@@ -1,0 +1,907 @@
+from __future__ import annotations
+
+from collections.abc import Iterable
+from datetime import datetime
+from typing import Any
+from urllib.parse import urlparse
+
+from boards.models import Board, BoardColumn, BoardMembership
+from boards.permissions import require_board_manager, require_board_member
+from django.contrib.auth import get_user_model
+from django.db import transaction
+from django.db.models import F, Max
+from django.utils import timezone
+
+from .errors import DomainError
+from .models import (
+    AuditEvent,
+    ChangeProposal,
+    ChecklistItem,
+    CommitmentRevision,
+    Review,
+    Submission,
+    Task,
+)
+
+User = get_user_model()
+TEMP_POSITION_OFFSET = 1_000_000
+MOVING_TEMP_POSITION = 2_000_000
+
+
+def _serialize_task(task: Task) -> dict[str, Any]:
+    commitment = task.current_commitment
+    return {
+        "id": str(task.id),
+        "board_id": str(task.board_id),
+        "column_id": str(task.column_id),
+        "title": task.title,
+        "priority": task.priority,
+        "owner_id": str(task.current_owner_id) if task.current_owner_id else None,
+        "row_version": task.row_version,
+        "position": task.position,
+        "is_cancelled": task.is_cancelled,
+        "commitment_revision": commitment.revision if commitment else None,
+        "due_at": commitment.due_at.isoformat() if commitment else None,
+    }
+
+
+def _require_expected(
+    task: Task, board: Board, expected_version: int, expected_board_revision: int
+) -> None:
+    if task.row_version != expected_version or board.revision != expected_board_revision:
+        raise DomainError(
+            "stale_state",
+            "The task or board changed since it was loaded.",
+            status=409,
+            field_errors={
+                "expected_version": task.row_version,
+                "expected_board_revision": board.revision,
+            },
+        )
+
+
+def _board_and_task_for_update(task_id) -> tuple[Board, Task]:
+    board_id = Task.objects.filter(pk=task_id).values_list("board_id", flat=True).first()
+    if board_id is None:
+        raise DomainError("not_found", "Task not found.", status=404)
+    board = Board.objects.select_for_update().get(pk=board_id)
+    task = (
+        Task.objects.select_for_update()
+        .select_related("column", "current_commitment", "current_owner")
+        .get(pk=task_id, board=board)
+    )
+    return board, task
+
+
+def _eligible_owner(board: Board, owner_id) -> Any:
+    membership = (
+        BoardMembership.objects.select_related("user")
+        .filter(board=board, user_id=owner_id, is_active=True, user__is_active=True)
+        .first()
+    )
+    if membership is None:
+        raise DomainError(
+            "invalid_owner",
+            "Owner must be an active member of the board.",
+            field_errors={"owner_id": ["Invalid owner."]},
+        )
+    return membership.user
+
+
+def _column(board: Board, state: str) -> BoardColumn:
+    try:
+        return BoardColumn.objects.get(board=board, state=state)
+    except BoardColumn.DoesNotExist as exc:
+        raise DomainError(
+            "invalid_board", f"Board is missing the {state} column.", status=409
+        ) from exc
+
+
+def _next_position(column: BoardColumn) -> int:
+    current = (
+        Task.objects.filter(column=column, is_cancelled=False)
+        .aggregate(value=Max("position"))
+        .get("value")
+    )
+    return 0 if current is None else int(current) + 1
+
+
+def _bump(board: Board, task: Task) -> None:
+    board.revision += 1
+    task.row_version += 1
+    board.save(update_fields=["revision", "updated_at"])
+    task.save(update_fields=["row_version", "updated_at"])
+
+
+def _audit(
+    board: Board,
+    task: Task,
+    actor,
+    action: str,
+    *,
+    reason: str = "",
+    before: dict[str, Any] | None = None,
+    after: dict[str, Any] | None = None,
+) -> None:
+    AuditEvent.objects.create(
+        board=board,
+        board_revision=board.revision,
+        task=task,
+        actor=actor,
+        action=action,
+        reason=reason,
+        before=before or {},
+        after=after or {},
+    )
+
+
+def _validate_due(value: datetime) -> None:
+    if not isinstance(value, datetime) or timezone.is_naive(value):
+        raise DomainError(
+            "invalid_due_time",
+            "Deadline must be a timezone-aware datetime.",
+            field_errors={"due_at": ["A timezone offset is required."]},
+        )
+
+
+def _validate_evidence_links(links: Iterable[str]) -> list[str]:
+    clean: list[str] = []
+    for value in links:
+        if not isinstance(value, str) or len(value) > 2000:
+            raise DomainError("invalid_evidence", "Evidence links must be valid URLs.")
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise DomainError("invalid_evidence", "Evidence links must use http or https.")
+        if parsed.username or parsed.password:
+            raise DomainError(
+                "invalid_evidence", "Evidence links cannot contain embedded credentials."
+            )
+        clean.append(value)
+    if not clean:
+        raise DomainError("missing_evidence", "At least one evidence link is required.")
+    return clean
+
+
+def _required_checklist_snapshot(task: Task) -> list[dict[str, Any]]:
+    return [
+        {"id": str(item.id), "text": item.text, "required": item.required}
+        for item in task.checklist_items.filter(required=True).order_by("position")
+    ]
+
+
+def _resequence_for_move(task: Task, target: BoardColumn, target_position: int | None) -> None:
+    source_id = task.column_id
+    target_id = target.id
+    column_ids = {source_id, target_id}
+    locked = list(
+        Task.objects.select_for_update()
+        .filter(column_id__in=column_ids, is_cancelled=False)
+        .order_by("column_id", "position", "id")
+    )
+    source_items = [item for item in locked if item.column_id == source_id and item.id != task.id]
+    if source_id == target_id:
+        target_items = source_items
+    else:
+        target_items = [
+            item for item in locked if item.column_id == target_id and item.id != task.id
+        ]
+
+    index = (
+        len(target_items)
+        if target_position is None
+        else max(0, min(int(target_position), len(target_items)))
+    )
+    target_items.insert(index, task)
+
+    affected = {item.id for item in locked}
+    if task.id not in affected:
+        affected.add(task.id)
+    Task.objects.filter(id__in=affected).update(position=F("position") + TEMP_POSITION_OFFSET)
+    Task.objects.filter(pk=task.pk).update(column=target, position=MOVING_TEMP_POSITION)
+
+    if source_id != target_id:
+        for index, item in enumerate(source_items):
+            Task.objects.filter(pk=item.pk).update(position=index)
+    for index, item in enumerate(target_items):
+        Task.objects.filter(pk=item.pk).update(column=target, position=index)
+
+    task.column = target
+    task.position = target_items.index(task)
+
+
+def create_task(
+    *,
+    actor,
+    board_id,
+    title: str,
+    description: str = "",
+    priority: int = 1,
+    owner_id=None,
+    draft_due_at: datetime | None = None,
+    draft_acceptance_criteria: str = "",
+) -> Task:
+    title = title.strip()
+    if not title:
+        raise DomainError(
+            "invalid_title", "Task title is required.", field_errors={"title": ["Required."]}
+        )
+    if priority not in {1, 2, 3}:
+        raise DomainError("invalid_priority", "Priority must be 1, 2, or 3.")
+    if priority == 3 and draft_due_at is None:
+        raise DomainError("priority_requires_due", "Three-star draft tasks require a deadline.")
+    if draft_due_at is not None:
+        _validate_due(draft_due_at)
+
+    with transaction.atomic():
+        board = Board.objects.select_for_update().get(pk=board_id, archived=False)
+        require_board_member(actor, board.id, for_update=True)
+        owner = _eligible_owner(board, owner_id) if owner_id else None
+        backlog = _column(board, BoardColumn.State.BACKLOG)
+        task = Task.objects.create(
+            board=board,
+            column=backlog,
+            title=title,
+            description=description,
+            priority=priority,
+            current_owner=owner,
+            position=_next_position(backlog),
+            draft_due_at=draft_due_at,
+            draft_acceptance_criteria=draft_acceptance_criteria,
+            created_by=actor,
+        )
+        board.revision += 1
+        board.save(update_fields=["revision", "updated_at"])
+        _audit(board, task, actor, "create_task", after=_serialize_task(task))
+        return task
+
+
+def edit_task(
+    *,
+    actor,
+    task_id,
+    expected_version: int,
+    expected_board_revision: int,
+    title: str | None = None,
+    description: str | None = None,
+    priority: int | None = None,
+    owner_id=None,
+    draft_due_at: datetime | None = None,
+    draft_acceptance_criteria: str | None = None,
+) -> Task:
+    with transaction.atomic():
+        board, task = _board_and_task_for_update(task_id)
+        require_board_member(actor, board.id, for_update=True)
+        _require_expected(task, board, expected_version, expected_board_revision)
+        before = _serialize_task(task)
+
+        if task.committed_at is not None and any(
+            value is not None
+            for value in (priority, owner_id, draft_due_at, draft_acceptance_criteria)
+        ):
+            raise DomainError(
+                "protected_commitment",
+                "Owner, stars, deadline and acceptance criteria require "
+                "revise_commitment after commitment.",
+                status=409,
+            )
+        if title is not None:
+            cleaned = title.strip()
+            if not cleaned:
+                raise DomainError("invalid_title", "Task title is required.")
+            task.title = cleaned
+        if description is not None:
+            task.description = description
+        if task.committed_at is None:
+            if priority is not None:
+                if priority not in {1, 2, 3}:
+                    raise DomainError("invalid_priority", "Priority must be 1, 2, or 3.")
+                task.priority = priority
+            if owner_id is not None:
+                task.current_owner = _eligible_owner(board, owner_id)
+            if draft_due_at is not None:
+                _validate_due(draft_due_at)
+                task.draft_due_at = draft_due_at
+            if draft_acceptance_criteria is not None:
+                task.draft_acceptance_criteria = draft_acceptance_criteria
+            if task.priority == 3 and task.draft_due_at is None:
+                raise DomainError(
+                    "priority_requires_due", "Three-star draft tasks require a deadline."
+                )
+
+        _bump(board, task)
+        task.save()
+        _audit(board, task, actor, "edit_task", before=before, after=_serialize_task(task))
+        return task
+
+
+def commit_task(
+    *,
+    actor,
+    task_id,
+    expected_version: int,
+    expected_board_revision: int,
+    owner_id=None,
+    due_at: datetime | None = None,
+    acceptance_criteria: str | None = None,
+    reason: str = "Initial commitment",
+) -> Task:
+    with transaction.atomic():
+        board, task = _board_and_task_for_update(task_id)
+        require_board_manager(actor, board.id, for_update=True)
+        _require_expected(task, board, expected_version, expected_board_revision)
+        if task.committed_at is not None or task.column.state != BoardColumn.State.BACKLOG:
+            raise DomainError(
+                "already_committed", "Only backlog drafts can be committed.", status=409
+            )
+
+        chosen_owner_id = owner_id or task.current_owner_id
+        if chosen_owner_id is None:
+            raise DomainError("owner_required", "A committed task requires an accountable owner.")
+        owner = _eligible_owner(board, chosen_owner_id)
+        chosen_due = due_at or task.draft_due_at
+        if chosen_due is None:
+            raise DomainError("due_required", "A committed task requires a deadline.")
+        _validate_due(chosen_due)
+        criteria = (
+            acceptance_criteria
+            if acceptance_criteria is not None
+            else task.draft_acceptance_criteria
+        ).strip()
+        if not criteria:
+            raise DomainError("criteria_required", "Measurable acceptance criteria are required.")
+
+        before = _serialize_task(task)
+        commitment = CommitmentRevision.objects.create(
+            task=task,
+            revision=1,
+            owner=owner,
+            due_at=chosen_due,
+            priority=task.priority,
+            acceptance_criteria=criteria,
+            required_checklist_snapshot=_required_checklist_snapshot(task),
+            actor=actor,
+            reason=reason,
+        )
+        todo = _column(board, BoardColumn.State.TODO)
+        _resequence_for_move(task, todo, None)
+        task.current_owner = owner
+        task.original_owner = owner
+        task.current_commitment = commitment
+        task.committed_at = timezone.now()
+        task.row_version += 1
+        board.revision += 1
+        task.save()
+        board.save(update_fields=["revision", "updated_at"])
+        _audit(
+            board,
+            task,
+            actor,
+            "commit_task",
+            reason=reason,
+            before=before,
+            after=_serialize_task(task),
+        )
+        return task
+
+
+def move_task(
+    *,
+    actor,
+    task_id,
+    target_state: str,
+    target_position: int | None,
+    expected_version: int,
+    expected_board_revision: int,
+    reason: str = "",
+) -> Task:
+    allowed_active = {
+        BoardColumn.State.TODO,
+        BoardColumn.State.IN_PROGRESS,
+        BoardColumn.State.BLOCKED,
+    }
+    with transaction.atomic():
+        board, task = _board_and_task_for_update(task_id)
+        require_board_member(actor, board.id, for_update=True)
+        _require_expected(task, board, expected_version, expected_board_revision)
+        if task.is_cancelled:
+            raise DomainError("cancelled_task", "Cancelled tasks cannot be dragged.", status=409)
+
+        current_state = task.column.state
+        if current_state == BoardColumn.State.BACKLOG:
+            if target_state != BoardColumn.State.BACKLOG:
+                raise DomainError(
+                    "commit_required",
+                    "Moving a draft out of backlog requires commit_task.",
+                    status=409,
+                )
+        elif target_state not in allowed_active:
+            raise DomainError(
+                "invalid_transition",
+                "Use submit_result for REVIEW and review_submission for DONE.",
+                status=409,
+            )
+        if task.committed_at is not None and target_state == BoardColumn.State.BACKLOG:
+            raise DomainError(
+                "invalid_transition", "Committed tasks cannot return to backlog.", status=409
+            )
+        if target_state == BoardColumn.State.BLOCKED and not reason.strip():
+            raise DomainError("block_reason_required", "A reason is required when blocking a task.")
+
+        target = _column(board, target_state)
+        before = _serialize_task(task)
+        _resequence_for_move(task, target, target_position)
+        task.row_version += 1
+        board.revision += 1
+        task.save(update_fields=["column", "position", "row_version", "updated_at"])
+        board.save(update_fields=["revision", "updated_at"])
+        _audit(
+            board,
+            task,
+            actor,
+            "move_task",
+            reason=reason,
+            before=before,
+            after=_serialize_task(task),
+        )
+        return task
+
+
+def set_checklist_item(
+    *,
+    actor,
+    task_id,
+    item_id,
+    checked: bool,
+    expected_version: int,
+    expected_board_revision: int,
+) -> Task:
+    with transaction.atomic():
+        board, task = _board_and_task_for_update(task_id)
+        require_board_member(actor, board.id, for_update=True)
+        _require_expected(task, board, expected_version, expected_board_revision)
+        if task.is_cancelled or task.column.state in {
+            BoardColumn.State.REVIEW,
+            BoardColumn.State.DONE,
+        }:
+            raise DomainError(
+                "checklist_locked", "Checklist completion is locked in review or done.", status=409
+            )
+        item = ChecklistItem.objects.select_for_update().filter(pk=item_id, task=task).first()
+        if item is None:
+            raise DomainError("not_found", "Checklist item not found.", status=404)
+        before = {"item_id": str(item.id), "checked": item.checked}
+        item.checked = bool(checked)
+        item.save(update_fields=["checked", "updated_at"])
+        _bump(board, task)
+        _audit(
+            board,
+            task,
+            actor,
+            "set_checklist_item",
+            before=before,
+            after={"item_id": str(item.id), "checked": item.checked},
+        )
+        return task
+
+
+def propose_change(
+    *, actor, task_id, proposed_changes: dict[str, Any], reason: str
+) -> ChangeProposal:
+    if not reason.strip():
+        raise DomainError("reason_required", "A reason is required.")
+    allowed = {"owner_id", "priority", "due_at", "acceptance_criteria", "required_checklist"}
+    unknown = set(proposed_changes) - allowed
+    if unknown:
+        raise DomainError("invalid_change", f"Unsupported proposed fields: {sorted(unknown)}")
+    with transaction.atomic():
+        board, task = _board_and_task_for_update(task_id)
+        require_board_member(actor, board.id, for_update=True)
+        if task.committed_at is None:
+            raise DomainError(
+                "not_committed", "Use edit_task while the task is still a draft.", status=409
+            )
+        proposal = ChangeProposal.objects.create(
+            task=task,
+            proposer=actor,
+            proposed_changes=proposed_changes,
+            reason=reason,
+        )
+        board.revision += 1
+        task.row_version += 1
+        board.save(update_fields=["revision", "updated_at"])
+        task.save(update_fields=["row_version", "updated_at"])
+        _audit(
+            board,
+            task,
+            actor,
+            "propose_change",
+            reason=reason,
+            after={"proposal_id": str(proposal.id)},
+        )
+        return proposal
+
+
+def _replace_required_checklist(task: Task, values: list[dict[str, Any]]) -> None:
+    if not isinstance(values, list):
+        raise DomainError("invalid_checklist", "Required checklist must be a list.")
+    Task.objects.select_for_update().get(pk=task.pk)
+    existing_non_required = list(task.checklist_items.filter(required=False).order_by("position"))
+    task.checklist_items.filter(required=True).delete()
+    base = len(existing_non_required)
+    for index, value in enumerate(values):
+        text = str(value.get("text", "")).strip()
+        if not text:
+            raise DomainError("invalid_checklist", "Required checklist items need text.")
+        ChecklistItem.objects.create(
+            task=task,
+            text=text[:500],
+            required=True,
+            position=base + index,
+            checked=False,
+        )
+
+
+def revise_commitment(
+    *,
+    actor,
+    task_id,
+    expected_version: int,
+    expected_board_revision: int,
+    reason: str,
+    owner_id=None,
+    due_at: datetime | None = None,
+    priority: int | None = None,
+    acceptance_criteria: str | None = None,
+    required_checklist: list[dict[str, Any]] | None = None,
+) -> Task:
+    if not reason.strip():
+        raise DomainError("reason_required", "A manager revision requires a reason.")
+    with transaction.atomic():
+        board, task = _board_and_task_for_update(task_id)
+        require_board_manager(actor, board.id, for_update=True)
+        _require_expected(task, board, expected_version, expected_board_revision)
+        if task.committed_at is None or task.current_commitment is None:
+            raise DomainError(
+                "not_committed", "Draft tasks do not have commitments to revise.", status=409
+            )
+        if task.column.state == BoardColumn.State.DONE:
+            raise DomainError(
+                "reopen_required", "Reopen a done task before revising its commitment.", status=409
+            )
+
+        current = task.current_commitment
+        owner = _eligible_owner(board, owner_id) if owner_id is not None else current.owner
+        chosen_due = due_at if due_at is not None else current.due_at
+        _validate_due(chosen_due)
+        chosen_priority = priority if priority is not None else current.priority
+        if chosen_priority not in {1, 2, 3}:
+            raise DomainError("invalid_priority", "Priority must be 1, 2, or 3.")
+        criteria = (
+            acceptance_criteria.strip()
+            if acceptance_criteria is not None
+            else current.acceptance_criteria
+        )
+        if not criteria:
+            raise DomainError("criteria_required", "Acceptance criteria cannot be empty.")
+
+        pending = (
+            Submission.objects.select_for_update()
+            .filter(task=task, is_current=True, review__isnull=True)
+            .first()
+        )
+        if pending is not None and (
+            owner_id is not None
+            or acceptance_criteria is not None
+            or required_checklist is not None
+        ):
+            pending.is_current = False
+            pending.save(update_fields=["is_current"])
+            in_progress = _column(board, BoardColumn.State.IN_PROGRESS)
+            _resequence_for_move(task, in_progress, None)
+
+        if required_checklist is not None:
+            _replace_required_checklist(task, required_checklist)
+
+        before = _serialize_task(task)
+        revision = CommitmentRevision.objects.create(
+            task=task,
+            revision=current.revision + 1,
+            owner=owner,
+            due_at=chosen_due,
+            priority=chosen_priority,
+            acceptance_criteria=criteria,
+            required_checklist_snapshot=_required_checklist_snapshot(task),
+            actor=actor,
+            reason=reason,
+        )
+        task.current_commitment = revision
+        task.current_owner = owner
+        task.priority = chosen_priority
+        task.row_version += 1
+        board.revision += 1
+        task.save()
+        board.save(update_fields=["revision", "updated_at"])
+        _audit(
+            board,
+            task,
+            actor,
+            "revise_commitment",
+            reason=reason,
+            before=before,
+            after=_serialize_task(task),
+        )
+        return task
+
+
+def submit_result(
+    *,
+    actor,
+    task_id,
+    expected_version: int,
+    expected_board_revision: int,
+    result_summary: str,
+    evidence_links: list[str],
+    target_value=None,
+    actual_value=None,
+    unit: str = "",
+) -> Task:
+    summary = result_summary.strip()
+    if not summary:
+        raise DomainError("result_required", "Result summary is required.")
+    links = _validate_evidence_links(evidence_links)
+
+    with transaction.atomic():
+        board, task = _board_and_task_for_update(task_id)
+        membership = require_board_member(actor, board.id, for_update=True)
+        _require_expected(task, board, expected_version, expected_board_revision)
+        if task.current_commitment is None or task.current_owner_id is None:
+            raise DomainError("not_committed", "Only committed tasks can be submitted.", status=409)
+        if task.is_cancelled or task.column.state in {
+            BoardColumn.State.REVIEW,
+            BoardColumn.State.DONE,
+        }:
+            raise DomainError(
+                "invalid_transition", "Task cannot be submitted from its current state.", status=409
+            )
+        if actor.id != task.current_owner_id and membership.role != BoardMembership.Role.MANAGER:
+            raise DomainError(
+                "submit_forbidden",
+                "Only the accountable owner or a board manager may submit.",
+                status=403,
+            )
+
+        incomplete = list(
+            task.checklist_items.filter(required=True, checked=False).values_list("id", flat=True)
+        )
+        if incomplete:
+            raise DomainError(
+                "required_checklist_incomplete",
+                "Complete every required checklist item before submission.",
+                field_errors={"checklist": [str(value) for value in incomplete]},
+            )
+        if Submission.objects.filter(task=task, is_current=True).exists():
+            raise DomainError(
+                "submission_exists", "A current submission already exists.", status=409
+            )
+
+        before = _serialize_task(task)
+        commitment = task.current_commitment
+        owner = task.current_owner
+        if owner is None:
+            raise DomainError("invalid_owner", "Committed task owner is unavailable.", status=409)
+        Submission.objects.create(
+            task=task,
+            commitment=commitment,
+            accountable_owner=owner,
+            submitting_actor=actor,
+            result_summary=summary,
+            evidence_links=links,
+            criteria_snapshot=commitment.acceptance_criteria,
+            checklist_snapshot=[
+                {
+                    "id": str(item.id),
+                    "text": item.text,
+                    "required": item.required,
+                    "checked": item.checked,
+                }
+                for item in task.checklist_items.order_by("position")
+            ],
+            target_value=target_value,
+            actual_value=actual_value,
+            unit=unit[:64],
+        )
+        review = _column(board, BoardColumn.State.REVIEW)
+        _resequence_for_move(task, review, None)
+        task.row_version += 1
+        board.revision += 1
+        task.save(update_fields=["column", "position", "row_version", "updated_at"])
+        board.save(update_fields=["revision", "updated_at"])
+        _audit(board, task, actor, "submit_result", before=before, after=_serialize_task(task))
+        return task
+
+
+def review_submission(
+    *,
+    actor,
+    task_id,
+    expected_version: int,
+    expected_board_revision: int,
+    decision: str,
+    feedback: str = "",
+) -> Task:
+    if decision not in {Review.Decision.ACCEPTED, Review.Decision.REJECTED}:
+        raise DomainError("invalid_decision", "Decision must be ACCEPTED or REJECTED.")
+
+    with transaction.atomic():
+        board, task = _board_and_task_for_update(task_id)
+        require_board_manager(actor, board.id, for_update=True)
+        _require_expected(task, board, expected_version, expected_board_revision)
+        if task.column.state != BoardColumn.State.REVIEW:
+            raise DomainError("not_in_review", "Task is not awaiting review.", status=409)
+        submission = (
+            Submission.objects.select_for_update()
+            .select_related("accountable_owner", "submitting_actor")
+            .filter(task=task, is_current=True)
+            .first()
+        )
+        if submission is None or hasattr(submission, "review"):
+            raise DomainError(
+                "stale_submission", "No current unreviewed submission exists.", status=409
+            )
+        if actor.id in {submission.accountable_owner_id, submission.submitting_actor_id}:
+            raise DomainError(
+                "self_review_forbidden",
+                "The reviewer must be independent of the owner and submitting actor.",
+                status=403,
+            )
+
+        before = _serialize_task(task)
+        Review.objects.create(
+            submission=submission,
+            reviewer=actor,
+            decision=decision,
+            feedback=feedback,
+        )
+        if decision == Review.Decision.ACCEPTED:
+            target = _column(board, BoardColumn.State.DONE)
+        else:
+            submission.is_current = False
+            submission.save(update_fields=["is_current"])
+            target = _column(board, BoardColumn.State.IN_PROGRESS)
+        _resequence_for_move(task, target, None)
+        task.row_version += 1
+        board.revision += 1
+        task.save(update_fields=["column", "position", "row_version", "updated_at"])
+        board.save(update_fields=["revision", "updated_at"])
+        _audit(
+            board,
+            task,
+            actor,
+            "review_submission",
+            reason=feedback,
+            before=before,
+            after={**_serialize_task(task), "decision": decision},
+        )
+        return task
+
+
+def reopen_task(
+    *,
+    actor,
+    task_id,
+    expected_version: int,
+    expected_board_revision: int,
+    reason: str,
+) -> Task:
+    if not reason.strip():
+        raise DomainError("reason_required", "Reopening requires a reason.")
+    with transaction.atomic():
+        board, task = _board_and_task_for_update(task_id)
+        require_board_manager(actor, board.id, for_update=True)
+        _require_expected(task, board, expected_version, expected_board_revision)
+        if task.column.state != BoardColumn.State.DONE or task.is_cancelled:
+            raise DomainError(
+                "invalid_transition", "Only an accepted done task can be reopened.", status=409
+            )
+        current = Submission.objects.select_for_update().filter(task=task, is_current=True).first()
+        if current is not None:
+            current.is_current = False
+            current.save(update_fields=["is_current"])
+        before = _serialize_task(task)
+        target = _column(board, BoardColumn.State.IN_PROGRESS)
+        _resequence_for_move(task, target, None)
+        task.row_version += 1
+        board.revision += 1
+        task.save(update_fields=["column", "position", "row_version", "updated_at"])
+        board.save(update_fields=["revision", "updated_at"])
+        _audit(
+            board,
+            task,
+            actor,
+            "reopen_task",
+            reason=reason,
+            before=before,
+            after=_serialize_task(task),
+        )
+        return task
+
+
+def cancel_task(
+    *,
+    actor,
+    task_id,
+    expected_version: int,
+    expected_board_revision: int,
+    reason: str,
+) -> Task:
+    if not reason.strip():
+        raise DomainError("reason_required", "Cancellation requires a reason.")
+    with transaction.atomic():
+        board, task = _board_and_task_for_update(task_id)
+        require_board_manager(actor, board.id, for_update=True)
+        _require_expected(task, board, expected_version, expected_board_revision)
+        if task.is_cancelled:
+            raise DomainError("already_cancelled", "Task is already cancelled.", status=409)
+        before = _serialize_task(task)
+        task.is_cancelled = True
+        task.cancelled_at = timezone.now()
+        task.cancelled_reason = reason
+        task.row_version += 1
+        board.revision += 1
+        task.save(
+            update_fields=[
+                "is_cancelled",
+                "cancelled_at",
+                "cancelled_reason",
+                "row_version",
+                "updated_at",
+            ]
+        )
+        board.save(update_fields=["revision", "updated_at"])
+        _audit(
+            board,
+            task,
+            actor,
+            "cancel_task",
+            reason=reason,
+            before=before,
+            after=_serialize_task(task),
+        )
+        return task
+
+
+def restore_cancelled_task(
+    *,
+    actor,
+    task_id,
+    expected_version: int,
+    expected_board_revision: int,
+    reason: str,
+) -> Task:
+    if not reason.strip():
+        raise DomainError("reason_required", "Restoring a cancellation requires a reason.")
+    with transaction.atomic():
+        board, task = _board_and_task_for_update(task_id)
+        require_board_manager(actor, board.id, for_update=True)
+        _require_expected(task, board, expected_version, expected_board_revision)
+        if not task.is_cancelled:
+            raise DomainError("not_cancelled", "Task is not cancelled.", status=409)
+        before = _serialize_task(task)
+        task.is_cancelled = False
+        task.cancelled_at = None
+        task.cancelled_reason = ""
+        task.position = _next_position(task.column)
+        task.row_version += 1
+        board.revision += 1
+        task.save()
+        board.save(update_fields=["revision", "updated_at"])
+        _audit(
+            board,
+            task,
+            actor,
+            "restore_cancelled_task",
+            reason=reason,
+            before=before,
+            after=_serialize_task(task),
+        )
+        return task

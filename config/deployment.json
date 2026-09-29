@@ -1,0 +1,21 @@
+﻿{
+  "schema_version": 1,
+  "environment": "development",
+  "timezone": "Asia/Manila",
+  "workdays_iso": [1, 2, 3, 4, 5],
+  "workday_start": "08:00",
+  "workday_end": "18:00",
+  "member_digest_time": "08:30",
+  "manager_report_time": "17:30",
+  "reminder_minutes_before_due": 60,
+  "early_threshold_minutes": 60,
+  "poll_seconds": 10,
+  "worker_tick_seconds": 15,
+  "lease_seconds": 120,
+  "slack_mode": "off",
+  "restore_mode": false,
+  "private_base_url": null,
+  "allowed_client_cidrs": [],
+  "manager_user_id": null,
+  "backup_target": null
+}
