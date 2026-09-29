@@ -120,6 +120,7 @@ class BoardListCreateView(APIView):
         return Response([_board_summary(board) for board in boards])
 
     def post(self, request):
+        require_site_admin(request.user)
         payload = request.data if isinstance(request.data, dict) else {}
         name = str(payload.get("name", "")).strip()
         manager_ids = payload.get("manager_user_ids", [])
@@ -145,11 +146,11 @@ class BoardListCreateView(APIView):
             )
 
         try:
-            unique_manager_ids = {str(value) for value in manager_ids if str(value).strip()}
-            unique_manager_ids.add(str(request.user.id))
-            users = list(
+            requested_manager_ids = {str(value) for value in manager_ids if str(value).strip()}
+            requested_manager_ids.add(str(request.user.id))
+            requested_managers = list(
                 User.objects.filter(
-                    id__in=unique_manager_ids,
+                    id__in=requested_manager_ids,
                     is_active=True,
                 )
             )
@@ -163,7 +164,7 @@ class BoardListCreateView(APIView):
                 },
                 status=400,
             )
-        if len(users) != len(unique_manager_ids):
+        if len(requested_managers) != len(requested_manager_ids):
             return Response(
                 {
                     "code": "invalid_manager",
@@ -173,18 +174,32 @@ class BoardListCreateView(APIView):
                 },
                 status=400,
             )
+        users = list(User.objects.filter(is_active=True).order_by("username"))
 
         def create():
             board = Board.objects.create(name=name, created_by=request.user)
             for index, (state, label) in enumerate(STANDARD_COLUMNS):
                 BoardColumn.objects.create(board=board, state=state, name=label, position=index)
+            manager_user_ids: list[str] = []
             for user in users:
+                is_manager = (
+                    user.is_staff
+                    or user.is_superuser
+                    or str(user.id) in requested_manager_ids
+                )
+                role = (
+                    BoardMembership.Role.MANAGER
+                    if is_manager
+                    else BoardMembership.Role.MEMBER
+                )
                 BoardMembership.objects.create(
                     board=board,
                     user=user,
-                    role=BoardMembership.Role.MANAGER,
+                    role=role,
                     created_by=request.user,
                 )
+                if is_manager:
+                    manager_user_ids.append(str(user.id))
             AuditEvent.objects.create(
                 board=board,
                 board_revision=board.revision,
@@ -196,7 +211,8 @@ class BoardListCreateView(APIView):
                 after={
                     "board_id": str(board.id),
                     "name": board.name,
-                    "manager_user_ids": [str(user.id) for user in users],
+                    "manager_user_ids": manager_user_ids,
+                    "member_count": len(users),
                 },
             )
             return 201, _board_summary(board)

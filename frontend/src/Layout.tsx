@@ -45,7 +45,7 @@ export function Shell({
       </header>
       <main className="page">
         <Routes>
-          <Route path="/" element={<BoardsPage />} />
+          <Route path="/" element={<BoardsPage user={user} />} />
           <Route path="/boards/:boardId" element={<BoardPage user={user} />} />
           <Route path="/my-tasks" element={<MyTasksPage user={user} />} />
           <Route path="/manager" element={<ManagerPage />} />          <Route path="/calendar" element={<CalendarPage />} />

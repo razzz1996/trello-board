@@ -357,7 +357,6 @@ export function BoardPage({ user }: { user: SessionUser }) {
   const memberName = (task: Task) =>
     snapshot.members.find((member) => member.id === task.current_owner_id)?.username ?? "Unassigned";
   const selected = taskById(selectedTaskId);
-  const canShare = snapshot.membership.role === "MANAGER" || user.is_admin;
 
   return (
     <section className="board-page">
@@ -367,11 +366,7 @@ export function BoardPage({ user }: { user: SessionUser }) {
           <h1>{snapshot.board.name}</h1>
           <p className="muted">Capture first. Organize by dragging cards when you are ready.</p>
         </div>
-        {canShare && (
-          <button className="button button--ghost" type="button" onClick={() => setShareOpen(true)}>
-            Share
-          </button>
-        )}
+        <span className="status-pill">Shared with everyone</span>
       </div>
 
       <QuickAddCard snapshot={snapshot} onChanged={refresh} />

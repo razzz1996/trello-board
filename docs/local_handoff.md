@@ -38,7 +38,7 @@ The Stop launcher stops the local web, scheduler, worker, and proxy processes. P
 
 Latest full verifier evidence:
 
-- `evidence/verify_all_20260929T065747Z.json`
+- `evidence/verify_all_20260929T074944Z.json`
 - `evidence/local_restart_cycle_20260929T054104Z.json`
 
 The latest full verifier passed:
@@ -53,7 +53,7 @@ The latest full verifier passed:
 - npm audit: 0 vulnerabilities
 - calendar fixtures
 - PostgreSQL connectivity
-- full automated test suite: 74 passing tests
+- full automated test suite: 76 passing tests
 - live API route matrix and end-to-end task workflow
 - live admin state changes with audit persistence
 - database integrity audit with no issues
@@ -65,8 +65,11 @@ The runtime readiness endpoint currently reports healthy database, scheduler, an
 
 - local username/password authentication and forced-password-change workflow
 - administrator account management with last-admin protection
-- user-created boards; the creator automatically becomes board manager
-- board-manager sharing and membership controls
+- administrator-only board creation
+- every active user automatically receives access to every board
+- every active user can add, edit, assign, comment on, and drag cards on every board
+- active administrators are board managers; other active users receive member access automatically
+- new users are automatically synchronized to all existing boards
 - five-list Trello-style workflow: Inbox, To Do, In Progress, Later, Done
 - quick Inbox capture with title-first card creation
 - free drag/reorder between the five everyday lists

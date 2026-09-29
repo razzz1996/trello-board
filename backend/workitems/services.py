@@ -78,18 +78,14 @@ def _board_and_task_for_update(task_id) -> tuple[Board, Task]:
 
 
 def _eligible_owner(board: Board, owner_id) -> Any:
-    membership = (
-        BoardMembership.objects.select_related("user")
-        .filter(board=board, user_id=owner_id, is_active=True, user__is_active=True)
-        .first()
-    )
-    if membership is None:
+    user = User.objects.filter(pk=owner_id, is_active=True).first()
+    if user is None:
         raise DomainError(
             "invalid_owner",
-            "Owner must be an active member of the board.",
+            "Owner must be an active user.",
             field_errors={"owner_id": ["Invalid owner."]},
         )
-    return membership.user
+    return user
 
 
 def _column(board: Board, state: str) -> BoardColumn:

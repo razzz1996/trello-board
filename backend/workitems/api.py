@@ -53,10 +53,7 @@ def _serialized(task: Task) -> dict[str, Any]:
 class TaskCollectionView(APIView):
     def get(self, request):
         qs = (
-            Task.objects.filter(
-                board__memberships__user=request.user,
-                board__memberships__is_active=True,
-            )
+            Task.objects.filter(board__archived=False)
             .select_related(
                 "board",
                 "column",

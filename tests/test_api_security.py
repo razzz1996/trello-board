@@ -47,7 +47,7 @@ def test_anonymous_session_endpoint_returns_json_401():
     assert response.json()["code"] == "authentication_required"
 
 
-def test_non_member_board_snapshot_is_hidden_as_404():
+def test_every_active_user_can_open_any_board():
     admin = User.objects.create_user(username="admin-api", password=None, is_staff=True)
     manager = User.objects.create_user(username="manager-api", password=None)
     outsider = User.objects.create_user(username="outsider-api", password=None)
@@ -57,7 +57,10 @@ def test_non_member_board_snapshot_is_hidden_as_404():
     client.force_authenticate(user=outsider)
     response = client.get(f"/api/v1/boards/{board.id}/snapshot")
 
-    assert response.status_code == 404
+    assert response.status_code == 200
+    assert response.json()["membership"]["role"] == BoardMembership.Role.MEMBER
+    membership = BoardMembership.objects.get(board=board, user=outsider)
+    assert membership.is_active is True
 
 
 def test_last_active_administrator_cannot_disable_itself():
@@ -365,34 +368,49 @@ def test_forced_password_change_succeeds_and_keeps_session_valid():
     assert me.json()["force_password_change"] is False
 
 
-def test_regular_user_can_create_board_and_becomes_manager():
+def test_regular_user_cannot_create_board():
     user = User.objects.create_user(username="board-creator", password=None)
     client = APIClient()
     client.force_authenticate(user=user)
 
-    payload = {"name": "My Trello Style Board", "manager_user_ids": []}
-    first = client.post(
+    response = client.post(
         "/api/v1/boards",
-        payload,
-        format="json",
-        HTTP_IDEMPOTENCY_KEY="member-board-create",
-    )
-    replay = client.post(
-        "/api/v1/boards",
-        payload,
+        {"name": "Forbidden Board", "manager_user_ids": []},
         format="json",
         HTTP_IDEMPOTENCY_KEY="member-board-create",
     )
 
-    assert first.status_code == 201
-    assert replay.status_code == 201
-    assert first.json() == replay.json()
+    assert response.status_code == 403
+    assert not Board.objects.filter(name="Forbidden Board").exists()
 
-    board = Board.objects.get(pk=first.json()["id"])
-    membership = BoardMembership.objects.get(board=board, user=user)
-    assert membership.role == BoardMembership.Role.MANAGER
 
-    snapshot = client.get(f"/api/v1/boards/{board.id}/snapshot")
+def test_admin_created_board_is_immediately_visible_and_editable_to_all_users():
+    admin = User.objects.create_user(username="global-board-admin", password=None, is_staff=True)
+    member_a = User.objects.create_user(username="global-member-a", password=None)
+    member_b = User.objects.create_user(username="global-member-b", password=None)
+
+    admin_client = APIClient()
+    admin_client.force_authenticate(user=admin)
+    created = admin_client.post(
+        "/api/v1/boards",
+        {"name": "Global Operations", "manager_user_ids": []},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="admin-global-board-create",
+    )
+    assert created.status_code == 201
+    board = Board.objects.get(pk=created.json()["id"])
+
+    assert BoardMembership.objects.get(board=board, user=admin).role == BoardMembership.Role.MANAGER
+    assert BoardMembership.objects.get(board=board, user=member_a).role == BoardMembership.Role.MEMBER
+    assert BoardMembership.objects.get(board=board, user=member_b).role == BoardMembership.Role.MEMBER
+
+    member_client = APIClient()
+    member_client.force_authenticate(user=member_a)
+    boards = member_client.get("/api/v1/boards")
+    assert boards.status_code == 200
+    assert str(board.id) in {row["id"] for row in boards.json()}
+
+    snapshot = member_client.get(f"/api/v1/boards/{board.id}/snapshot")
     assert snapshot.status_code == 200
     assert [column["name"] for column in snapshot.json()["columns"]] == [
         "Inbox",
@@ -401,6 +419,22 @@ def test_regular_user_can_create_board_and_becomes_manager():
         "Later",
         "Done",
     ]
+
+    card = member_client.post(
+        "/api/v1/tasks",
+        {
+            "board_id": str(board.id),
+            "title": "Member-created card",
+            "priority": 1,
+            "owner_id": str(member_b.id),
+            "draft_due_at": None,
+            "draft_acceptance_criteria": "",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="global-member-card-create",
+    )
+    assert card.status_code == 201
+    assert card.json()["current_owner_id"] == str(member_b.id)
 
 
 def test_board_manager_can_share_board_by_username():
@@ -438,3 +472,14 @@ def test_board_manager_can_share_board_by_username():
     )
     assert promoted.status_code == 200
     assert promoted.json()["role"] == "MANAGER"
+
+
+def test_new_user_is_automatically_added_to_existing_boards():
+    admin = User.objects.create_user(username="membership-sync-admin", password=None, is_staff=True)
+    board = create_board(admin, admin)
+
+    member = User.objects.create_user(username="membership-sync-member", password=None)
+
+    membership = BoardMembership.objects.get(board=board, user=member)
+    assert membership.is_active is True
+    assert membership.role == BoardMembership.Role.MEMBER

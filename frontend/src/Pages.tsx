@@ -41,7 +41,7 @@ function TaskTable({ tasks }: { tasks: Task[] }) {
   );
 }
 
-export function BoardsPage() {
+export function BoardsPage({ user }: { user: SessionUser }) {
   const navigate = useNavigate();
   const [boards, setBoards] = useState<BoardSummary[]>([]);
   const [error, setError] = useState("");
@@ -86,14 +86,16 @@ export function BoardsPage() {
       <div className="page-heading">
         <div>
           <h1>Boards</h1>
-          <p>Create a workspace, capture cards, and drag them through your workflow.</p>
+          <p>Every board is shared with all active users. Open any board and work together.</p>
         </div>
-        <button className="button button--primary" type="button" onClick={() => setCreating(true)}>
-          + Create board
-        </button>
+        {user.is_admin && (
+          <button className="button button--primary" type="button" onClick={() => setCreating(true)}>
+            + Create board
+          </button>
+        )}
       </div>
       {error && <Alert>{error}</Alert>}
-      {creating && (
+      {user.is_admin && creating && (
         <form className="board-create-inline" onSubmit={submitBoard}>
           <label>
             Board name
@@ -120,10 +122,16 @@ export function BoardsPage() {
       {!loading && !boards.length && !creating && (
         <div className="empty-state empty-state--welcome">
           <strong>No boards yet</strong>
-          <span>Create your first board and start dropping tasks into Inbox.</span>
-          <button className="button button--primary" type="button" onClick={() => setCreating(true)}>
-            Create your first board
-          </button>
+          <span>
+            {user.is_admin
+              ? "Create the first board and it will automatically be available to every active user."
+              : "An administrator can create the first board. It will appear here automatically for everyone."}
+          </span>
+          {user.is_admin && (
+            <button className="button button--primary" type="button" onClick={() => setCreating(true)}>
+              Create your first board
+            </button>
+          )}
         </div>
       )}
       <div className="board-grid">
