@@ -156,7 +156,7 @@ class PasswordChangeView(APIView):
             )
 
         with transaction.atomic():
-            user = type(request.user).objects.select_for_update().get(pk=request.user.pk)
+            user = User.objects.select_for_update().get(pk=request.user.pk)
             user.set_password(new_password)
             user.force_password_change = False
             user.session_generation += 1

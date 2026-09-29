@@ -37,7 +37,7 @@ The Stop launcher stops the local web, scheduler, worker, and proxy processes. P
 
 Latest full verifier evidence:
 
-- `evidence/verify_all_20260929T061357Z.json`
+- `evidence/verify_all_20260929T062130Z.json`
 - `evidence/local_restart_cycle_20260929T054104Z.json`
 
 The latest full verifier passed:
@@ -52,7 +52,7 @@ The latest full verifier passed:
 - npm audit: 0 vulnerabilities
 - calendar fixtures
 - PostgreSQL connectivity
-- full automated test suite: 69 passing tests
+- full automated test suite: 70 passing tests
 - live API route matrix and end-to-end task workflow
 - live admin state changes with audit persistence
 - database integrity audit with no issues

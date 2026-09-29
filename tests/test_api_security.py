@@ -320,3 +320,46 @@ def test_admin_create_and_reset_password_are_audited_without_exposing_password()
         target=target,
         action="reset_password",
     ).exists()
+
+
+def test_forced_password_change_succeeds_and_keeps_session_valid():
+    user = User.objects.create_user(
+        username="forced-password-user",
+        password=TEST_PASSWORD,
+        force_password_change=True,
+    )
+    client = APIClient(enforce_csrf_checks=True)
+
+    client.get("/api/v1/session/csrf/")
+    csrf_token = client.cookies["csrftoken"].value
+    login_response = client.post(
+        "/api/v1/session/login",
+        {"username": user.username, "password": TEST_PASSWORD},
+        format="json",
+        HTTP_X_CSRFTOKEN=csrf_token,
+    )
+    assert login_response.status_code == 200
+    assert login_response.json()["force_password_change"] is True
+
+    csrf_token = client.cookies["csrftoken"].value
+    replacement = TEST_PASSWORD + "Permanent!"
+    changed = client.post(
+        "/api/v1/session/password-change",
+        {
+            "current_password": TEST_PASSWORD,
+            "new_password": replacement,
+        },
+        format="json",
+        HTTP_X_CSRFTOKEN=csrf_token,
+    )
+
+    assert changed.status_code == 200
+    assert changed.json()["force_password_change"] is False
+    user.refresh_from_db()
+    assert user.force_password_change is False
+    assert user.check_password(replacement)
+
+    me = client.get("/api/v1/session/me/")
+    assert me.status_code == 200
+    assert me.json()["username"] == user.username
+    assert me.json()["force_password_change"] is False
