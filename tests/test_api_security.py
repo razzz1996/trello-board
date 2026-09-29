@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from accounts.models import AccountAuditEvent
 from boards.models import Board, BoardColumn, BoardMembership
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
@@ -225,3 +226,97 @@ def test_task_create_receipt_serializes_uuid_fields_and_replays_cleanly():
     assert first.json()["board_id"] == str(board.id)
     assert isinstance(first.json()["column_id"], str)
     assert board.tasks.filter(title="CSR AUTO REPLY").count() == 1
+
+
+def test_successful_admin_state_change_is_audited():
+    admin = User.objects.create_user(username="state-admin", password=None, is_staff=True)
+    target = User.objects.create_user(username="state-target", password=None)
+    client = APIClient()
+    client.force_authenticate(user=admin)
+
+    disabled = client.post(
+        f"/api/v1/admin/users/{target.id}/commands/disable",
+        {"reason": "Regression test successful disable"},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="successful-disable-audit",
+    )
+
+    assert disabled.status_code == 200
+    assert disabled.json()["is_active"] is False
+    target.refresh_from_db()
+    assert target.is_active is False
+    event = AccountAuditEvent.objects.get(target=target, action="disable")
+    assert event.actor_id == admin.id
+    assert event.before["is_active"] is True
+    assert event.after["is_active"] is False
+
+    enabled = client.post(
+        f"/api/v1/admin/users/{target.id}/commands/enable",
+        {"reason": "Regression test successful enable"},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="successful-enable-audit",
+    )
+
+    assert enabled.status_code == 200
+    assert enabled.json()["is_active"] is True
+    assert AccountAuditEvent.objects.filter(target=target, action="enable").exists()
+
+
+def test_admin_create_and_reset_password_are_audited_without_exposing_password():
+    admin = User.objects.create_user(username="create-admin", password=None, is_staff=True)
+    client = APIClient()
+    client.force_authenticate(user=admin)
+
+    payload = {
+        "username": "created-via-admin",
+        "temporary_password": TEST_PASSWORD,
+        "is_admin": False,
+        "reason": "Regression test account creation",
+    }
+    created = client.post(
+        "/api/v1/admin/users",
+        payload,
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="admin-create-audited",
+    )
+    replay = client.post(
+        "/api/v1/admin/users",
+        payload,
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="admin-create-audited",
+    )
+
+    assert created.status_code == 201
+    assert replay.status_code == 201
+    assert created.json() == replay.json()
+    assert "password" not in created.json()
+    target = User.objects.get(username="created-via-admin")
+    assert target.force_password_change is True
+    assert target.check_password(TEST_PASSWORD)
+    assert AccountAuditEvent.objects.filter(
+        actor=admin,
+        target=target,
+        action="create_user",
+    ).exists()
+
+    replacement = TEST_PASSWORD + "Reset!"
+    reset = client.post(
+        f"/api/v1/admin/users/{target.id}/commands/reset_password",
+        {
+            "temporary_password": replacement,
+            "reason": "Regression test password reset",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="admin-reset-audited",
+    )
+
+    assert reset.status_code == 200
+    assert "password" not in reset.json()
+    target.refresh_from_db()
+    assert target.force_password_change is True
+    assert target.check_password(replacement)
+    assert AccountAuditEvent.objects.filter(
+        actor=admin,
+        target=target,
+        action="reset_password",
+    ).exists()

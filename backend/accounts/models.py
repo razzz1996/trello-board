@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
@@ -26,12 +27,12 @@ class User(AbstractUser):
 class AccountAuditEvent(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     actor = models.ForeignKey(
-        "self",
+        settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name="account_audit_events",
     )
     target = models.ForeignKey(
-        "self",
+        settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name="account_audit_history",
     )
