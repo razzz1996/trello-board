@@ -42,6 +42,18 @@ def _advisory_key(actor_id: Any, endpoint: str, key: str) -> int:
     return int.from_bytes(hashlib.sha256(raw).digest()[:8], "big", signed=True)
 
 
+def _json_safe(value: Any) -> Any:
+    """Normalize response values to exactly what a JSON response/receipt can persist."""
+    return json.loads(
+        json.dumps(
+            value,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            default=str,
+        )
+    )
+
+
 def run_idempotent(
     *,
     actor,
@@ -103,7 +115,10 @@ def run_idempotent(
         status, body = handler()
         if status < 200 or status > 299:
             raise RuntimeError("Idempotent handlers may persist only successful responses.")
+        normalized_body = _json_safe(body)
+        if not isinstance(normalized_body, dict):
+            raise RuntimeError("Idempotent handlers must return a JSON object response body.")
         receipt.response_status = status
-        receipt.response_body = body
+        receipt.response_body = normalized_body
         receipt.save(update_fields=["response_status", "response_body"])
-        return IdempotentResult(status=status, body=body, replayed=False)
+        return IdempotentResult(status=status, body=normalized_body, replayed=False)

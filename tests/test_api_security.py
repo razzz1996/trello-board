@@ -188,3 +188,40 @@ def test_non_admin_cannot_read_detailed_health():
 
     response = client.get("/api/v1/health/detail")
     assert response.status_code == 403
+
+
+def test_task_create_receipt_serializes_uuid_fields_and_replays_cleanly():
+    admin = User.objects.create_user(username="admin-create", password=None, is_staff=True)
+    manager = User.objects.create_user(username="manager-create", password=None)
+    board = create_board(admin, manager)
+
+    client = APIClient()
+    client.force_authenticate(user=manager)
+    payload = {
+        "board_id": str(board.id),
+        "title": "CSR AUTO REPLY",
+        "priority": 3,
+        "owner_id": str(manager.id),
+        "draft_due_at": "2026-09-30T10:00:00+08:00",
+        "draft_acceptance_criteria": "",
+    }
+
+    first = client.post(
+        "/api/v1/tasks",
+        payload,
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="create-task-uuid-response",
+    )
+    second = client.post(
+        "/api/v1/tasks",
+        payload,
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="create-task-uuid-response",
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json() == second.json()
+    assert first.json()["board_id"] == str(board.id)
+    assert isinstance(first.json()["column_id"], str)
+    assert board.tasks.filter(title="CSR AUTO REPLY").count() == 1
