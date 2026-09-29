@@ -23,11 +23,11 @@ class Board(models.Model):
 
 class BoardColumn(models.Model):
     class State(models.TextChoices):
-        BACKLOG = "BACKLOG", "Backlog"
+        BACKLOG = "BACKLOG", "Inbox"
         TODO = "TODO", "To Do"
         IN_PROGRESS = "IN_PROGRESS", "In Progress"
-        BLOCKED = "BLOCKED", "Blocked"
-        REVIEW = "REVIEW", "Review"
+        BLOCKED = "BLOCKED", "Later"
+        REVIEW = "REVIEW", "Review (legacy)"
         DONE = "DONE", "Done"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

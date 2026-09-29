@@ -11,15 +11,19 @@ from workitems.models import AuditEvent
 from workitems.serializers import TaskSerializer
 
 from .models import Board, BoardColumn, BoardMembership
-from .permissions import require_board_member, require_site_admin, visible_boards
+from .permissions import (
+    require_board_manager_or_site_admin,
+    require_board_member,
+    require_site_admin,
+    visible_boards,
+)
 
 User = get_user_model()
 STANDARD_COLUMNS = [
-    (BoardColumn.State.BACKLOG, "Backlog"),
+    (BoardColumn.State.BACKLOG, "Inbox"),
     (BoardColumn.State.TODO, "To Do"),
     (BoardColumn.State.IN_PROGRESS, "In Progress"),
-    (BoardColumn.State.BLOCKED, "Blocked"),
-    (BoardColumn.State.REVIEW, "Review"),
+    (BoardColumn.State.BLOCKED, "Later"),
     (BoardColumn.State.DONE, "Done"),
 ]
 
@@ -53,6 +57,10 @@ def _board_admin_error(exc: BoardAdminError) -> Response:
         {"code": exc.code, "message": exc.message, "field_errors": {}, "request_id": None},
         status=exc.status,
     )
+
+
+def _authorize_board_manager_or_admin(user, board_id) -> None:
+    require_board_manager_or_site_admin(user, board_id)
 
 
 def _membership_payload(item: BoardMembership) -> dict[str, object]:
@@ -103,14 +111,15 @@ def _audit_board_membership(
 
 class BoardListCreateView(APIView):
     def get(self, request):
-        if request.user.is_staff or request.user.is_superuser:
+        include_all = str(request.query_params.get("all", "")).lower() in {"1", "true", "yes"}
+        if include_all:
+            require_site_admin(request.user)
             boards = Board.objects.all().order_by("name")
         else:
             boards = visible_boards(request.user).order_by("name")
         return Response([_board_summary(board) for board in boards])
 
     def post(self, request):
-        require_site_admin(request.user)
         payload = request.data if isinstance(request.data, dict) else {}
         name = str(payload.get("name", "")).strip()
         manager_ids = payload.get("manager_user_ids", [])
@@ -124,19 +133,20 @@ class BoardListCreateView(APIView):
                 },
                 status=400,
             )
-        if not isinstance(manager_ids, list) or not manager_ids:
+        if not isinstance(manager_ids, list):
             return Response(
                 {
-                    "code": "manager_required",
-                    "message": "At least one initial board manager is required.",
-                    "field_errors": {},
+                    "code": "invalid_manager",
+                    "message": "manager_user_ids must be a list when provided.",
+                    "field_errors": {"manager_user_ids": ["Expected a list."]},
                     "request_id": None,
                 },
                 status=400,
             )
 
         try:
-            unique_manager_ids = set(manager_ids)
+            unique_manager_ids = {str(value) for value in manager_ids if str(value).strip()}
+            unique_manager_ids.add(str(request.user.id))
             users = list(
                 User.objects.filter(
                     id__in=unique_manager_ids,
@@ -198,7 +208,6 @@ class BoardListCreateView(APIView):
                 key=request.headers.get("Idempotency-Key"),
                 payload=dict(payload),
                 handler=create,
-                authorize_replay=lambda: require_site_admin(request.user),
             )
         except IdempotencyError as exc:
             return _idempotency_error(exc)
@@ -217,9 +226,12 @@ class BoardSnapshotView(APIView):
                 response = Response(status=304)
                 response.headers["ETag"] = etag
                 return response
-            columns = list(board.columns.order_by("position"))
+            columns = list(
+                board.columns.exclude(state=BoardColumn.State.REVIEW).order_by("position")
+            )
             tasks = (
                 board.tasks.filter(is_cancelled=False)
+                .exclude(column__state=BoardColumn.State.REVIEW)
                 .select_related("column", "current_owner", "original_owner", "current_commitment")
                 .prefetch_related(
                     "checklist_items",
@@ -269,7 +281,7 @@ class BoardSnapshotView(APIView):
 
 class BoardMembershipCollectionView(APIView):
     def get(self, request, board_id):
-        require_site_admin(request.user)
+        require_board_manager_or_site_admin(request.user, board_id)
         board = Board.objects.filter(pk=board_id).first()
         if board is None:
             return _board_admin_error(BoardAdminError("not_found", "Board not found.", 404))
@@ -281,27 +293,39 @@ class BoardMembershipCollectionView(APIView):
         return Response([_membership_payload(item) for item in rows])
 
     def post(self, request, board_id):
-        require_site_admin(request.user)
+        require_board_manager_or_site_admin(request.user, board_id)
         payload = request.data if isinstance(request.data, dict) else {}
         user_id = payload.get("user_id")
-        if not isinstance(user_id, str) or not user_id:
+        username = str(payload.get("username", "")).strip()
+        if user_id:
+            if not isinstance(user_id, str):
+                return Response(
+                    {
+                        "code": "invalid_user",
+                        "message": "user_id must be a valid UUID.",
+                        "field_errors": {"user_id": ["Invalid UUID."]},
+                        "request_id": None,
+                    },
+                    status=400,
+                )
+            try:
+                user_id = str(UUID(user_id))
+            except ValueError:
+                return Response(
+                    {
+                        "code": "invalid_user",
+                        "message": "user_id must be a valid UUID.",
+                        "field_errors": {"user_id": ["Invalid UUID."]},
+                        "request_id": None,
+                    },
+                    status=400,
+                )
+        elif not username:
             return Response(
                 {
                     "code": "invalid_user",
-                    "message": "user_id is required.",
-                    "field_errors": {"user_id": ["Required."]},
-                    "request_id": None,
-                },
-                status=400,
-            )
-        try:
-            user_id = str(UUID(user_id))
-        except ValueError:
-            return Response(
-                {
-                    "code": "invalid_user",
-                    "message": "user_id must be a valid UUID.",
-                    "field_errors": {"user_id": ["Invalid UUID."]},
+                    "message": "Enter a username to share this board.",
+                    "field_errors": {"username": ["Required."]},
                     "request_id": None,
                 },
                 status=400,
@@ -323,7 +347,11 @@ class BoardMembershipCollectionView(APIView):
                 board = Board.objects.select_for_update().filter(pk=board_id).first()
                 if board is None:
                     raise BoardAdminError("not_found", "Board not found.", 404)
-                user = User.objects.select_for_update().filter(pk=user_id, is_active=True).first()
+                user_query = User.objects.select_for_update().filter(is_active=True)
+                if user_id:
+                    user = user_query.filter(pk=user_id).first()
+                else:
+                    user = user_query.filter(username__iexact=username).first()
                 if user is None:
                     raise BoardAdminError(
                         "invalid_user",
@@ -375,7 +403,10 @@ class BoardMembershipCollectionView(APIView):
                 key=request.headers.get("Idempotency-Key"),
                 payload=dict(payload),
                 handler=create,
-                authorize_replay=lambda: require_site_admin(request.user),
+                authorize_replay=lambda: _authorize_board_manager_or_admin(
+                    request.user,
+                    board_id,
+                ),
             )
         except BoardAdminError as exc:
             return _board_admin_error(exc)
@@ -388,7 +419,7 @@ class BoardMembershipCommandView(APIView):
     COMMANDS = {"set_role", "remove"}
 
     def post(self, request, board_id, user_id, command: str):
-        require_site_admin(request.user)
+        require_board_manager_or_site_admin(request.user, board_id)
         if command not in self.COMMANDS:
             return _board_admin_error(
                 BoardAdminError(
@@ -473,7 +504,10 @@ class BoardMembershipCommandView(APIView):
                 key=request.headers.get("Idempotency-Key"),
                 payload=dict(payload),
                 handler=execute,
-                authorize_replay=lambda: require_site_admin(request.user),
+                authorize_replay=lambda: _authorize_board_manager_or_admin(
+                    request.user,
+                    board_id,
+                ),
             )
         except BoardAdminError as exc:
             return _board_admin_error(exc)

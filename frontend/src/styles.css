@@ -380,3 +380,142 @@ tr:last-child td { border-bottom: 0; }
   .preview-list > div { grid-template-columns: 1fr; }
   .preview-list small { grid-column: 1; }
 }
+
+
+/* Trello-style everyday board experience */
+.board-create-inline {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  max-width: 620px;
+  margin: 0 0 20px;
+  padding: 16px;
+  background: white;
+  border: 1px solid #e4e7ec;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(16, 24, 40, .05);
+}
+.board-create-inline label { flex: 1; }
+.empty-state--welcome {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 48px 24px;
+}
+.empty-state--welcome strong { color: #172033; font-size: 1.05rem; }
+
+.board-page {
+  min-height: calc(100vh - 62px);
+  margin: -24px;
+  padding: 18px 18px 32px;
+  background:
+    radial-gradient(circle at top right, rgba(49, 86, 200, .13), transparent 32%),
+    linear-gradient(135deg, #eaf1ff 0%, #e7edf7 55%, #edf2f8 100%);
+}
+.board-page__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+.board-page__header h1 { margin-bottom: 4px; }
+
+.quick-capture-wrap { max-width: 760px; margin-bottom: 16px; }
+.quick-capture {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto;
+  gap: 8px;
+  padding: 8px;
+  background: rgba(255, 255, 255, .88);
+  border: 1px solid rgba(207, 213, 223, .9);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(31, 42, 68, .07);
+  backdrop-filter: blur(8px);
+}
+.quick-capture input {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+.quick-capture input:focus {
+  background: white;
+  border-color: #8ea3ef;
+  box-shadow: 0 0 0 3px rgba(86, 115, 219, .12);
+}
+
+.board-page .kanban-board {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(265px, 300px);
+  grid-template-columns: none;
+  gap: 12px;
+  align-items: start;
+  overflow-x: auto;
+  padding: 2px 2px 22px;
+  scroll-snap-type: x proximity;
+}
+.board-page .column-drop {
+  min-width: 265px;
+  scroll-snap-align: start;
+}
+.board-page .kanban-column {
+  min-height: 240px;
+  background: rgba(240, 243, 248, .94);
+  border: 1px solid rgba(208, 215, 226, .95);
+  box-shadow: 0 5px 18px rgba(31, 42, 68, .05);
+}
+.board-page .kanban-column > header h2 {
+  font-size: .92rem;
+  font-weight: 800;
+}
+.board-page .kanban-column__body { min-height: 150px; }
+
+.board-page .task-card {
+  display: block;
+  cursor: grab;
+  touch-action: none;
+  border-color: #d9e0ea;
+  box-shadow: 0 2px 6px rgba(16, 24, 40, .07);
+}
+.board-page .task-card:active { cursor: grabbing; }
+.board-page .task-card__body {
+  width: 100%;
+  padding: 11px 12px;
+}
+.board-page .task-card__body:hover { background: #fbfcff; }
+.board-page .task-card__body .stars { font-size: .82rem; }
+
+.share-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 160px auto;
+  gap: 8px;
+  align-items: end;
+  margin-bottom: 18px;
+}
+.share-members { display: grid; gap: 8px; }
+.share-member {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.share-member > div:first-child { display: grid; gap: 2px; }
+.share-member span { color: #667085; font-size: .8rem; }
+
+@media (max-width: 960px) {
+  .board-page { margin: -16px; padding: 14px 14px 28px; }
+}
+@media (max-width: 700px) {
+  .board-create-inline,
+  .quick-capture,
+  .share-form {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+  .board-page__header { flex-direction: column; }
+  .share-member { align-items: flex-start; flex-direction: column; }
+}

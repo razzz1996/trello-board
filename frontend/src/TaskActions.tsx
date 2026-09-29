@@ -3,7 +3,16 @@
 import { commandTask, createTask } from "./api";
 import { TaskWorkspaceExtras } from "./TaskWorkspaceExtras";
 import type { BoardSnapshot, SessionUser, Task } from "./types";
-import { Alert, errorMessage, formatDateTime, isOverdue, Modal, stars, taskDue } from "./ui";
+import {
+  Alert,
+  errorMessage,
+  formatDateTime,
+  isOverdue,
+  Modal,
+  stars,
+  taskDue,
+  taskStateLabel,
+} from "./ui";
 
 export function CreateTaskButton({
   snapshot,
@@ -88,6 +97,60 @@ export function CreateTaskButton({
         </div>
       </form>
     </Modal>
+  );
+}
+
+export function QuickAddCard({
+  snapshot,
+  onChanged,
+}: {
+  snapshot: BoardSnapshot;
+  onChanged: () => Promise<void>;
+}) {
+  const [title, setTitle] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const cleaned = title.trim();
+    if (!cleaned) return;
+    setBusy(true);
+    setError("");
+    try {
+      await createTask({
+        board_id: snapshot.board.id,
+        title: cleaned,
+        priority: 1,
+        owner_id: null,
+        draft_due_at: null,
+        draft_acceptance_criteria: "",
+      });
+      setTitle("");
+      await onChanged();
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="quick-capture-wrap">
+      {error && <Alert>{error}</Alert>}
+      <form className="quick-capture" onSubmit={submit}>
+        <input
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder="Capture a task into Inbox…"
+          maxLength={200}
+          aria-label="New card title"
+        />
+        <button className="button button--primary" disabled={busy || !title.trim()}>
+          {busy ? "Adding…" : "+ Add to Inbox"}
+        </button>
+      </form>
+    </div>
   );
 }
 
@@ -292,16 +355,12 @@ export function TaskDetailModal({
   currentUser,
   onClose,
   onChanged,
-  onSubmit,
-  onReview,
 }: {
   task: Task;
   snapshot: BoardSnapshot;
   currentUser: SessionUser;
   onClose: () => void;
   onChanged: () => Promise<void>;
-  onSubmit: () => void;
-  onReview: () => void;
 }) {
   const member = snapshot.members.find((item) => item.id === task.current_owner_id);
   const [error, setError] = useState("");
@@ -331,17 +390,15 @@ export function TaskDetailModal({
       <div className="task-detail__meta">
         <span className="stars">{stars(task.priority)}</span>
         <span className={isOverdue(task) ? "status-pill status-pill--danger" : "status-pill"}>
-          {task.column_state.replaceAll("_", " ")}
+          {taskStateLabel(task.column_state)}
         </span>
         {isOverdue(task) && <span className="status-pill status-pill--danger">Overdue</span>}
       </div>
       <dl className="detail-grid">
+        <dt>List</dt><dd>{taskStateLabel(task.column_state)}</dd>
         <dt>Owner</dt><dd>{member?.username ?? "Unassigned"}</dd>
-        <dt>Deadline</dt><dd>{formatDateTime(taskDue(task))}</dd>
-        <dt>Version</dt><dd>Task {task.row_version} · Board {snapshot.revision}</dd>
-        <dt>Description</dt><dd>{task.description || "—"}</dd>
-        <dt>Acceptance criteria</dt>
-        <dd>{task.current_commitment?.acceptance_criteria || task.draft_acceptance_criteria || "—"}</dd>
+        <dt>Due date</dt><dd>{formatDateTime(taskDue(task))}</dd>
+        <dt>Description</dt><dd>{task.description || "No description yet."}</dd>
       </dl>
       {task.checklist_items.length > 0 && (
         <section>
@@ -350,7 +407,7 @@ export function TaskDetailModal({
             {task.checklist_items.map((item) => (
               <label key={item.id} className="checklist__item">
                 <input type="checkbox" checked={item.checked}
-                  disabled={busyItem === item.id || ["REVIEW", "DONE"].includes(task.column_state)}
+                  disabled={busyItem === item.id}
                   onChange={(e) => void toggleChecklist(item.id, e.target.checked)} />
                 <span>{item.text}</span>
                 {item.required && <span className="required-chip">Required</span>}
@@ -366,14 +423,6 @@ export function TaskDetailModal({
         currentUser={currentUser}
         onChanged={onChanged}
       />
-      <div className="modal__actions">
-        {["TODO", "IN_PROGRESS", "BLOCKED"].includes(task.column_state) && (
-          <button className="button button--primary" type="button" onClick={onSubmit}>Submit result</button>
-        )}
-        {task.column_state === "REVIEW" && snapshot.membership.role === "MANAGER" && (
-          <button className="button button--primary" type="button" onClick={onReview}>Review result</button>
-        )}
-      </div>
     </Modal>
   );
 }

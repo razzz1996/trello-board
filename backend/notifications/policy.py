@@ -14,6 +14,7 @@ from .jobs import enqueue_job
 from .models import Job, Notification
 
 ACTIVE_STATES = {
+    BoardColumn.State.BACKLOG,
     BoardColumn.State.TODO,
     BoardColumn.State.IN_PROGRESS,
     BoardColumn.State.BLOCKED,
@@ -104,11 +105,7 @@ def create_task_notification(job: Job) -> Notification | None:
             if not isinstance(submission_id, str) or not submission_id:
                 return None
             submission = task.submissions.filter(pk=submission_id, is_current=True).first()
-            if (
-                submission is None
-                or task.column.state != BoardColumn.State.REVIEW
-                or hasattr(submission, "review")
-            ):
+            if submission is None or hasattr(submission, "review"):
                 return None
         else:
             if task.is_cancelled or task.column.state not in ACTIVE_STATES:

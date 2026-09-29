@@ -8,7 +8,19 @@ export function errorMessage(error: unknown): string {
 }
 
 export function stars(priority: number): string {
-  return "★".repeat(priority) + "☆".repeat(Math.max(0, 3 - priority));
+  return "★".repeat(priority);
+}
+
+export function taskStateLabel(state: string): string {
+  const labels: Record<string, string> = {
+    BACKLOG: "Inbox",
+    TODO: "To Do",
+    IN_PROGRESS: "In Progress",
+    BLOCKED: "Later",
+    REVIEW: "Review",
+    DONE: "Done",
+  };
+  return labels[state] ?? state.replaceAll("_", " ");
 }
 
 export function taskDue(task: Task): string | null {

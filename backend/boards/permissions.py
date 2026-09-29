@@ -45,3 +45,12 @@ def require_board_manager(user, board_id, *, for_update: bool = False) -> BoardM
 def require_site_admin(user) -> None:
     if not user.is_authenticated or not user.is_active or not (user.is_staff or user.is_superuser):
         raise PermissionDenied("Administrator role required")
+
+
+def require_board_manager_or_site_admin(user, board_id) -> BoardMembership | None:
+    """Allow global administrators or managers of the specific board."""
+    if not user.is_authenticated or not user.is_active:
+        raise PermissionDenied("Active account required")
+    if user.is_staff or user.is_superuser:
+        return None
+    return require_board_manager(user, board_id)

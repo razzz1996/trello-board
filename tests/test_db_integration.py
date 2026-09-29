@@ -19,7 +19,7 @@ from reports.services import create_snapshot
 from schedules.generation import generate_schedule_batch
 from schedules.models import Occurrence, Schedule, ScheduleRevision
 from workitems.errors import DomainError
-from workitems.models import ChangeProposal, CommentEditHistory, Review, Task
+from workitems.models import ChangeProposal, ChecklistItem, CommentEditHistory, Review, Task
 from workitems.services import (
     add_comment,
     cancel_task,
@@ -32,6 +32,7 @@ from workitems.services import (
     resolve_change_proposal,
     review_submission,
     revise_commitment,
+    set_checklist_item,
     submit_result,
 )
 
@@ -160,7 +161,7 @@ def test_submit_and_independent_review_reaches_done_and_self_review_is_blocked()
     )
     board.refresh_from_db()
     task.refresh_from_db()
-    assert task.column.state == BoardColumn.State.REVIEW
+    assert task.column.state == BoardColumn.State.TODO
     assert Job.objects.filter(job_type="review_request").exists()
 
     with pytest.raises(DomainError, match="independent"):
@@ -646,3 +647,81 @@ def test_assignment_notification_is_suppressed_after_task_is_done():
 
     assert task.column.state == BoardColumn.State.DONE
     assert create_task_notification(assignment) is None
+
+
+def test_uncommitted_card_can_move_freely_across_trello_lists():
+    _, _, _, member, _, board = make_board()
+    task = create_task(
+        actor=member,
+        board_id=board.id,
+        title="Flexible card",
+        priority=1,
+        owner_id=None,
+    )
+
+    for target_state in (
+        BoardColumn.State.TODO,
+        BoardColumn.State.IN_PROGRESS,
+        BoardColumn.State.BLOCKED,
+        BoardColumn.State.DONE,
+        BoardColumn.State.BACKLOG,
+    ):
+        board.refresh_from_db()
+        task.refresh_from_db()
+        task = move_task(
+            actor=member,
+            task_id=task.id,
+            target_state=target_state,
+            target_position=None,
+            expected_version=task.row_version,
+            expected_board_revision=board.revision,
+            reason="Drag test",
+        )
+        task.refresh_from_db()
+        assert task.column.state == target_state
+
+
+def test_checklist_remains_editable_after_card_is_dragged_to_done():
+    _, _, _, member, _, board = make_board()
+    task = create_task(
+        actor=member,
+        board_id=board.id,
+        title="Done card remains editable",
+        priority=1,
+        owner_id=None,
+    )
+    item = ChecklistItem.objects.create(
+        task=task,
+        text="Final follow-up",
+        required=False,
+        position=0,
+        checked=False,
+    )
+
+    board.refresh_from_db()
+    task.refresh_from_db()
+    task = move_task(
+        actor=member,
+        task_id=task.id,
+        target_state=BoardColumn.State.DONE,
+        target_position=None,
+        expected_version=task.row_version,
+        expected_board_revision=board.revision,
+        reason="Finished for now",
+    )
+
+    board.refresh_from_db()
+    task.refresh_from_db()
+    updated = set_checklist_item(
+        actor=member,
+        task_id=task.id,
+        item_id=item.id,
+        checked=True,
+        expected_version=task.row_version,
+        expected_board_revision=board.revision,
+    )
+
+    item.refresh_from_db()
+    updated.refresh_from_db()
+    assert updated.column.state == BoardColumn.State.DONE
+    assert item.checked is True

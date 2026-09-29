@@ -37,7 +37,6 @@ def create_personal_digest(job: Job) -> Notification | None:
         for task in active
         if task.current_commitment
         and task.current_commitment.due_at < observed_at
-        and task.column.state != BoardColumn.State.REVIEW
     ]
     due_today = [
         task
@@ -46,7 +45,12 @@ def create_personal_digest(job: Job) -> Notification | None:
         and task.current_commitment.due_at.astimezone(zone).date() == local_date
     ]
     priority = list(active.filter(priority=3)[:20])
-    review = list(active.filter(column__state=BoardColumn.State.REVIEW)[:20])
+    review = list(
+        active.filter(
+            submissions__is_current=True,
+            submissions__review__isnull=True,
+        ).distinct()[:20]
+    )
 
     lines = [
         f"Daily task digest for {local_date.isoformat()}",

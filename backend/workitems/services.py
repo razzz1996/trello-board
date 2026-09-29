@@ -401,10 +401,12 @@ def move_task(
     expected_board_revision: int,
     reason: str = "",
 ) -> Task:
-    allowed_active = {
+    movable_states = {
+        BoardColumn.State.BACKLOG,
         BoardColumn.State.TODO,
         BoardColumn.State.IN_PROGRESS,
         BoardColumn.State.BLOCKED,
+        BoardColumn.State.DONE,
     }
     with transaction.atomic():
         board, task = _board_and_task_for_update(task_id)
@@ -412,27 +414,12 @@ def move_task(
         _require_expected(task, board, expected_version, expected_board_revision)
         if task.is_cancelled:
             raise DomainError("cancelled_task", "Cancelled tasks cannot be dragged.", status=409)
-
-        current_state = task.column.state
-        if current_state == BoardColumn.State.BACKLOG:
-            if target_state != BoardColumn.State.BACKLOG:
-                raise DomainError(
-                    "commit_required",
-                    "Moving a draft out of backlog requires commit_task.",
-                    status=409,
-                )
-        elif target_state not in allowed_active:
+        if target_state not in movable_states:
             raise DomainError(
                 "invalid_transition",
-                "Use submit_result for REVIEW and review_submission for DONE.",
+                "Cards can be moved between Inbox, To Do, In Progress, Later, and Done.",
                 status=409,
             )
-        if task.committed_at is not None and target_state == BoardColumn.State.BACKLOG:
-            raise DomainError(
-                "invalid_transition", "Committed tasks cannot return to backlog.", status=409
-            )
-        if target_state == BoardColumn.State.BLOCKED and not reason.strip():
-            raise DomainError("block_reason_required", "A reason is required when blocking a task.")
 
         target = _column(board, target_state)
         before = _serialize_task(task)
@@ -466,12 +453,9 @@ def set_checklist_item(
         board, task = _board_and_task_for_update(task_id)
         require_board_member(actor, board.id, for_update=True)
         _require_expected(task, board, expected_version, expected_board_revision)
-        if task.is_cancelled or task.column.state in {
-            BoardColumn.State.REVIEW,
-            BoardColumn.State.DONE,
-        }:
+        if task.is_cancelled:
             raise DomainError(
-                "checklist_locked", "Checklist completion is locked in review or done.", status=409
+                "checklist_locked", "Cancelled cards cannot be updated.", status=409
             )
         item = ChecklistItem.objects.select_for_update().filter(pk=item_id, task=task).first()
         if item is None:
@@ -678,12 +662,9 @@ def submit_result(
         _require_expected(task, board, expected_version, expected_board_revision)
         if task.current_commitment is None or task.current_owner_id is None:
             raise DomainError("not_committed", "Only committed tasks can be submitted.", status=409)
-        if task.is_cancelled or task.column.state in {
-            BoardColumn.State.REVIEW,
-            BoardColumn.State.DONE,
-        }:
+        if task.is_cancelled:
             raise DomainError(
-                "invalid_transition", "Task cannot be submitted from its current state.", status=409
+                "invalid_transition", "Cancelled tasks cannot be submitted.", status=409
             )
         if actor.id != task.current_owner_id and membership.role != BoardMembership.Role.MANAGER:
             raise DomainError(
@@ -732,11 +713,9 @@ def submit_result(
             actual_value=actual_value,
             unit=unit[:64],
         )
-        review = _column(board, BoardColumn.State.REVIEW)
-        _resequence_for_move(task, review, None)
         task.row_version += 1
         board.revision += 1
-        task.save(update_fields=["column", "position", "row_version", "updated_at"])
+        task.save(update_fields=["row_version", "updated_at"])
         board.save(update_fields=["revision", "updated_at"])
         _audit(board, task, actor, "submit_result", before=before, after=_serialize_task(task))
         from notifications.obligations import schedule_review_requests
@@ -761,8 +740,6 @@ def review_submission(
         board, task = _board_and_task_for_update(task_id)
         require_board_manager(actor, board.id, for_update=True)
         _require_expected(task, board, expected_version, expected_board_revision)
-        if task.column.state != BoardColumn.State.REVIEW:
-            raise DomainError("not_in_review", "Task is not awaiting review.", status=409)
         submission = (
             Submission.objects.select_for_update()
             .select_related("accountable_owner", "submitting_actor")

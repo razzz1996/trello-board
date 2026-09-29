@@ -103,16 +103,13 @@ def _eligible(notification: Notification) -> bool:
             .exclude(submitting_actor=recipient)
             .first()
         )
-        return (
-            membership.role == BoardMembership.Role.MANAGER
-            and task.column.state == BoardColumn.State.REVIEW
-            and submission is not None
-        )
+        return membership.role == BoardMembership.Role.MANAGER and submission is not None
     if notification.kind == "overdue_manager_escalation":
         return (
             membership.role == BoardMembership.Role.MANAGER
             and task.column.state
             in {
+                BoardColumn.State.BACKLOG,
                 BoardColumn.State.TODO,
                 BoardColumn.State.IN_PROGRESS,
                 BoardColumn.State.BLOCKED,
@@ -124,12 +121,14 @@ def _eligible(notification: Notification) -> bool:
         return False
     if notification.kind == "due_reminder":
         return task.column.state in {
+            BoardColumn.State.BACKLOG,
             BoardColumn.State.TODO,
             BoardColumn.State.IN_PROGRESS,
             BoardColumn.State.BLOCKED,
         }
     if notification.kind == "overdue_escalation":
         return task.column.state in {
+            BoardColumn.State.BACKLOG,
             BoardColumn.State.TODO,
             BoardColumn.State.IN_PROGRESS,
             BoardColumn.State.BLOCKED,

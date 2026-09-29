@@ -363,3 +363,78 @@ def test_forced_password_change_succeeds_and_keeps_session_valid():
     assert me.status_code == 200
     assert me.json()["username"] == user.username
     assert me.json()["force_password_change"] is False
+
+
+def test_regular_user_can_create_board_and_becomes_manager():
+    user = User.objects.create_user(username="board-creator", password=None)
+    client = APIClient()
+    client.force_authenticate(user=user)
+
+    payload = {"name": "My Trello Style Board", "manager_user_ids": []}
+    first = client.post(
+        "/api/v1/boards",
+        payload,
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="member-board-create",
+    )
+    replay = client.post(
+        "/api/v1/boards",
+        payload,
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="member-board-create",
+    )
+
+    assert first.status_code == 201
+    assert replay.status_code == 201
+    assert first.json() == replay.json()
+
+    board = Board.objects.get(pk=first.json()["id"])
+    membership = BoardMembership.objects.get(board=board, user=user)
+    assert membership.role == BoardMembership.Role.MANAGER
+
+    snapshot = client.get(f"/api/v1/boards/{board.id}/snapshot")
+    assert snapshot.status_code == 200
+    assert [column["name"] for column in snapshot.json()["columns"]] == [
+        "Inbox",
+        "To Do",
+        "In Progress",
+        "Later",
+        "Done",
+    ]
+
+
+def test_board_manager_can_share_board_by_username():
+    creator = User.objects.create_user(username="share-manager", password=None)
+    teammate = User.objects.create_user(username="share-teammate", password=None)
+    board = create_board(creator, creator)
+
+    client = APIClient()
+    client.force_authenticate(user=creator)
+    added = client.post(
+        f"/api/v1/boards/{board.id}/memberships",
+        {
+            "username": teammate.username,
+            "role": "MEMBER",
+            "reason": "Share regression test",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="manager-share-board",
+    )
+    assert added.status_code == 201
+    assert added.json()["username"] == teammate.username
+
+    listing = client.get(f"/api/v1/boards/{board.id}/memberships")
+    assert listing.status_code == 200
+    assert {row["username"] for row in listing.json()} >= {
+        creator.username,
+        teammate.username,
+    }
+
+    promoted = client.post(
+        f"/api/v1/boards/{board.id}/memberships/{teammate.id}/commands/set_role",
+        {"role": "MANAGER", "reason": "Promote collaborator"},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="manager-promote-board-user",
+    )
+    assert promoted.status_code == 200
+    assert promoted.json()["role"] == "MANAGER"

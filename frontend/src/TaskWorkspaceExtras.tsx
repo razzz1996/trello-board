@@ -122,9 +122,9 @@ function DraftEditor({
   return (
     <section className="task-section">
       <div className="section-heading">
-        <h3>Draft setup</h3>
+        <h3>Card details</h3>
         <button className="button button--ghost" type="button" onClick={() => setOpen(!open)}>
-          {open ? "Hide" : "Edit draft"}
+          {open ? "Hide" : "Edit card"}
         </button>
       </div>
       {open && (
@@ -143,7 +143,7 @@ function DraftEditor({
                   <option value={1}>★</option><option value={2}>★★</option><option value={3}>★★★</option>
                 </select>
               </label>
-              <label>Draft owner
+              <label>Owner
                 <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
                   <option value="">Unassigned</option>
                   {snapshot.members.map((member) => (
@@ -151,19 +151,19 @@ function DraftEditor({
                   ))}
                 </select>
               </label>
-              <label>Draft deadline
+              <label>Due date
                 <input type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} />
               </label>
             </div>
-            <label>Draft acceptance criteria
+            <label>Notes / acceptance criteria
               <textarea value={criteria} onChange={(e) => setCriteria(e.target.value)} rows={4} />
             </label>
-            <button className="button button--primary" disabled={busy}>Save draft fields</button>
+            <button className="button button--primary" disabled={busy}>Save card details</button>
           </form>
           <ChecklistStructureEditor items={items} setItems={setItems} />
           <button className="button button--primary" type="button"
             disabled={busy} onClick={() => void saveChecklist()}>
-            Save checklist structure
+            Save checklist
           </button>
         </div>
       )}
@@ -183,7 +183,7 @@ function ChecklistStructureEditor({
   return (
     <div className="stack">
       <div className="section-heading">
-        <h4>Checklist structure</h4>
+        <h4>Checklist</h4>
         <button className="button button--ghost" type="button"
           onClick={() =>
             setItems([...items, { text: "", required: requiredOnly }])

@@ -138,11 +138,11 @@ export async function changePassword(
   });
 }
 
-export async function getBoards(): Promise<BoardSummary[]> {
-  return request<BoardSummary[]>("/api/v1/boards");
+export async function getBoards(includeAll = false): Promise<BoardSummary[]> {
+  return request<BoardSummary[]>(includeAll ? "/api/v1/boards?all=1" : "/api/v1/boards");
 }
 
-export async function createBoard(name: string, managerUserIds: string[]): Promise<BoardSummary> {
+export async function createBoard(name: string, managerUserIds: string[] = []): Promise<BoardSummary> {
   return request<BoardSummary>(
     "/api/v1/boards",
     {
@@ -286,6 +286,24 @@ export async function addBoardMembership(
   );
 }
 
+export async function addBoardMembershipByUsername(
+  boardId: string,
+  username: string,
+  role: Role,
+): Promise<BoardMembershipAdmin> {
+  return request<BoardMembershipAdmin>(
+    `/api/v1/boards/${encodeURIComponent(boardId)}/memberships`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        username,
+        role,
+        reason: "Shared from board",
+      }),
+    },
+    { idempotentMutation: true },
+  );
+}
 export async function commandBoardMembership(
   boardId: string,
   userId: string,

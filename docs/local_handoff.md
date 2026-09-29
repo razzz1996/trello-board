@@ -2,7 +2,8 @@
 
 ## Current local access
 
-- Website: `http://127.0.0.1:8080/`
+- Standard local website: `http://127.0.0.1:8080/`
+- Vite development host (when running): `http://127.0.0.1:5173/`
 - Initial administrator username: `raz`
 - Administrator password: known only to the operator; it is not stored in project documentation.
 - Environment: `development`
@@ -37,7 +38,7 @@ The Stop launcher stops the local web, scheduler, worker, and proxy processes. P
 
 Latest full verifier evidence:
 
-- `evidence/verify_all_20260929T062130Z.json`
+- `evidence/verify_all_20260929T065747Z.json`
 - `evidence/local_restart_cycle_20260929T054104Z.json`
 
 The latest full verifier passed:
@@ -52,7 +53,7 @@ The latest full verifier passed:
 - npm audit: 0 vulnerabilities
 - calendar fixtures
 - PostgreSQL connectivity
-- full automated test suite: 70 passing tests
+- full automated test suite: 74 passing tests
 - live API route matrix and end-to-end task workflow
 - live admin state changes with audit persistence
 - database integrity audit with no issues
@@ -64,12 +65,14 @@ The runtime readiness endpoint currently reports healthy database, scheduler, an
 
 - local username/password authentication and forced-password-change workflow
 - administrator account management with last-admin protection
-- board membership roles
-- six-column task board
-- drag/reorder conflict handling
-- task commitments and commitment revisions
+- user-created boards; the creator automatically becomes board manager
+- board-manager sharing and membership controls
+- five-list Trello-style workflow: Inbox, To Do, In Progress, Later, Done
+- quick Inbox capture with title-first card creation
+- free drag/reorder between the five everyday lists
+- task commitments and commitment revisions remain available as optional audited workflow
 - checklist baselines
-- submissions and independent review before Done
+- optional submissions and independent review without blocking ordinary drag-to-Done behavior
 - comments and change proposals
 - idempotency receipts
 - recurrence preview/publish/generation

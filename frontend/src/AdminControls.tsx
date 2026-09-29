@@ -32,7 +32,7 @@ export function AdminControls({ user }: { user: SessionUser }) {
   const [success, setSuccess] = useState("");
 
   const refreshBase = useCallback(async () => {
-    const [boardRows, userRows] = await Promise.all([getBoards(), getAdminUsers()]);
+    const [boardRows, userRows] = await Promise.all([getBoards(true), getAdminUsers()]);
     setBoards(boardRows);
     setUsers(userRows);
     setSelectedBoardId((current) => current || boardRows[0]?.id || "");
