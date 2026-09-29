@@ -1,0 +1,28 @@
+﻿{
+    "captured_at":  "2026-09-29T05:41:05.0609806Z",
+    "stop_test":  {
+                      "exit_code":  0,
+                      "remaining_listeners_after_stop":  0
+                  },
+    "restart_test":  {
+                         "exit_code":  0,
+                         "url":  "http://127.0.0.1:8080/",
+                         "readiness":  {
+                                           "status":  "ready",
+                                           "environment":  "development",
+                                           "components":  {
+                                                              "database":  {
+                                                                               "ok":  true
+                                                                           },
+                                                              "scheduler":  {
+                                                                                "ok":  true,
+                                                                                "last_seen_at":  "2026-09-29T05:40:55.317520+00:00"
+                                                                            },
+                                                              "worker":  {
+                                                                             "ok":  true,
+                                                                             "last_seen_at":  "2026-09-29T05:40:55.403404+00:00"
+                                                                         }
+                                                          }
+                                       }
+                     }
+}
