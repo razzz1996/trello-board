@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from ipaddress import ip_address
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -44,6 +45,22 @@ if ENVIRONMENT == "pilot" and not DEPLOYMENT.get("backup_target"):
 
 ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 CSRF_TRUSTED_ORIGINS: list[str] = []
+
+lan_host = os.environ.get("PRODUCTIVITY_LAN_HOST", "").strip()
+if lan_host:
+    if ENVIRONMENT != "development":
+        raise RuntimeError("PRODUCTIVITY_LAN_HOST is only permitted in development")
+    address = ip_address(lan_host)
+    if not address.is_private:
+        raise RuntimeError("PRODUCTIVITY_LAN_HOST must be a private IPv4 or IPv6 address")
+    ALLOWED_HOSTS.append(lan_host)
+    CSRF_TRUSTED_ORIGINS.extend(
+        [
+            f"http://{lan_host}:5173",
+            f"http://{lan_host}:8080",
+        ]
+    )
+
 if private_base_url:
     parsed = urlparse(private_base_url)
     if not parsed.hostname or parsed.scheme != "https":

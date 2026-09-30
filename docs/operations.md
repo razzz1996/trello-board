@@ -5,6 +5,8 @@
 - Application root: C:\Users\PC 19\Desktop\PRODUCTIVITY WEBSITE
 - Web application server: Waitress on 127.0.0.1:8000
 - Development reverse proxy: Caddy on 127.0.0.1:8080
+- Team LAN frontend: Vite on 172.16.0.222:5173
+- Windows Firewall scope: TCP 5173 from 172.16.0.0/23 only
 - PostgreSQL 18.6: loopback only on 127.0.0.1 and ::1 port 5432
 - Scheduler and worker: Python management commands with database-backed heartbeats
 - Slack mode: off
@@ -42,11 +44,17 @@ Backup operator: UNASSIGNED - owner input required.
 
 ## Startup
 
-Development/manual:
+Host-only development/manual:
 1. ops\windows\run-web.ps1
 2. ops\windows\run-scheduler.ps1
 3. ops\windows\run-worker.ps1
 4. ops\windows\run-caddy-dev.ps1
+
+Office LAN access:
+1. Double-click `Start eMEGA Team Access.cmd` on the desktop.
+2. Share `http://172.16.0.222:5173/` with users on the same office subnet.
+3. Use `Stop eMEGA Team Access.cmd` before maintenance or when LAN access is no longer needed.
+4. If the host's Ethernet address changes, update `PRODUCTIVITY_LAN_HOST`, the Vite launcher, and the scoped firewall rule before restarting.
 
 Pilot supervision is not yet configured. S18 requires a restricted service identity plus reboot, logoff and forced-failure recovery verification.
 

@@ -1,0 +1,46 @@
+﻿{
+    "captured_at":  "2026-09-30T01:51:15.0221423Z",
+    "url":  "http://172.16.0.222:5173/",
+    "subnet":  "172.16.0.0/23",
+    "root_http":  200,
+    "readiness":  {
+                      "status":  "ready",
+                      "environment":  "development",
+                      "components":  {
+                                         "database":  {
+                                                          "ok":  true
+                                                      },
+                                         "scheduler":  {
+                                                           "ok":  true,
+                                                           "last_seen_at":  "2026-09-30T01:51:08.382935+00:00"
+                                                       },
+                                         "worker":  {
+                                                        "ok":  true,
+                                                        "last_seen_at":  "2026-09-30T01:51:08.506567+00:00"
+                                                    }
+                                     }
+                  },
+    "session_smoke":  {
+                          "base_url":  "http://172.16.0.222:5173",
+                          "csrf_status":  200,
+                          "logout_status":  204,
+                          "ok":  true,
+                          "session_status":  200
+                      },
+    "listener":  {
+                     "LocalAddress":  "172.16.0.222",
+                     "LocalPort":  5173,
+                     "OwningProcess":  34232
+                 },
+    "firewall_rule":  {
+                          "DisplayName":  "eMEGA Productivity LAN 5173",
+                          "Enabled":  1,
+                          "Direction":  1,
+                          "Action":  2,
+                          "Profile":  6
+                      },
+    "firewall_scope":  {
+                           "LocalAddress":  "172.16.0.222",
+                           "RemoteAddress":  "172.16.0.0/255.255.254.0"
+                       }
+}

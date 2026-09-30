@@ -2,25 +2,27 @@
 
 ## Current local access
 
-- Standard local website: `http://127.0.0.1:8080/`
-- Vite development host (when running): `http://127.0.0.1:5173/`
+- Team LAN website: `http://172.16.0.222:5173/`
+- Standard host-only website: `http://127.0.0.1:8080/`
 - Initial administrator username: `raz`
 - Administrator password: known only to the operator; it is not stored in project documentation.
 - Environment: `development`
 - Slack mode: `off`
 
-The development website is intentionally loopback-only. It is not exposed to the LAN or public internet.
+The Vite development server is bound only to the host's private office address `172.16.0.222`. The Windows Firewall rule permits TCP 5173 only from the local `172.16.0.0/23` subnet. Waitress, Caddy, and PostgreSQL remain loopback-only and are reached through Vite's same-origin API proxy.
 
 ## One-click start and stop
 
-Two desktop launchers are available:
+Four desktop launchers are available:
 
-- `Start eMEGA Productivity.cmd`
+- `Start eMEGA Productivity.cmd` — host-only mode
 - `Stop eMEGA Productivity.cmd`
+- `Start eMEGA Team Access.cmd` — office LAN mode
+- `Stop eMEGA Team Access.cmd`
 
-The Start launcher checks PostgreSQL, starts Waitress, scheduler, worker, and Caddy when needed, waits for readiness, and opens the local website.
+The Team Access launcher checks PostgreSQL, starts Waitress, scheduler, worker, and Caddy, then runs `npm run dev -- --host 172.16.0.222 --port 5173 --strictPort`. It waits for API readiness and opens the LAN URL.
 
-The Stop launcher stops the local web, scheduler, worker, and proxy processes. PostgreSQL remains running as the Windows service `postgresql-x64-18`.
+The stop launchers stop the relevant web, scheduler, worker, proxy, and Vite processes. PostgreSQL remains running as the Windows service `postgresql-x64-18`.
 
 ## Runtime components
 
@@ -38,7 +40,8 @@ The Stop launcher stops the local web, scheduler, worker, and proxy processes. P
 
 Latest full verifier evidence:
 
-- `evidence/verify_all_20260930T012020Z.json`
+- `evidence/verify_all_20260930T014949Z.json`
+- `evidence/lan_access_20260930T015111Z.json`
 - `evidence/local_restart_cycle_20260929T054104Z.json`
 
 The latest full verifier passed:
@@ -108,8 +111,9 @@ These blockers are recorded in `docs/implementation_status.json`.
 ## Security notes
 
 - No runtime secrets are tracked by Git.
-- PostgreSQL is not listening on the LAN.
-- The development reverse proxy is not listening on the LAN.
+- PostgreSQL, Waitress, and Caddy are not listening on the LAN.
+- Vite is listening only on `172.16.0.222:5173`; the firewall restricts access to `172.16.0.0/23`.
+- Team access uses plain HTTP on the trusted office LAN and is not suitable for public or untrusted networks.
 - Slack live sending is disabled.
 - No paid service has been enabled or purchased.
 - Release checks fail closed while the pilot/infrastructure gates remain unresolved.
