@@ -69,6 +69,11 @@ function SortableTaskCard({
             {formatDateTime(due)}
           </span>
         )}
+        {task.recurrence_frequency !== "NONE" && (
+          <span className="task-card__repeat">
+            ↻ {task.recurrence_frequency.toLowerCase()} · {formatDateTime(task.recurrence_next_at)}
+          </span>
+        )}
         {task.current_owner_id && <span className="task-card__owner">{memberName}</span>}
       </button>
     </article>
@@ -397,6 +402,10 @@ export function BoardPage({ user }: { user: SessionUser }) {
           currentUser={user}
           onClose={() => setSelectedTaskId(null)}
           onChanged={refresh}
+          onDeleted={async () => {
+            setSelectedTaskId(null);
+            await refresh();
+          }}
         />
       )}
       {shareOpen && (

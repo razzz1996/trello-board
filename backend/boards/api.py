@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from workitems.models import AuditEvent
 from workitems.serializers import TaskSerializer
 
+from .deletion import BoardDeletionError, delete_board
 from .models import Board, BoardColumn, BoardMembership
 from .permissions import (
     require_board_manager_or_site_admin,
@@ -183,15 +184,9 @@ class BoardListCreateView(APIView):
             manager_user_ids: list[str] = []
             for user in users:
                 is_manager = (
-                    user.is_staff
-                    or user.is_superuser
-                    or str(user.id) in requested_manager_ids
+                    user.is_staff or user.is_superuser or str(user.id) in requested_manager_ids
                 )
-                role = (
-                    BoardMembership.Role.MANAGER
-                    if is_manager
-                    else BoardMembership.Role.MEMBER
-                )
+                role = BoardMembership.Role.MANAGER if is_manager else BoardMembership.Role.MEMBER
                 BoardMembership.objects.create(
                     board=board,
                     user=user,
@@ -293,6 +288,44 @@ class BoardSnapshotView(APIView):
             )
             response.headers["ETag"] = etag
             return response
+
+
+class BoardDeleteView(APIView):
+    def post(self, request, board_id):
+        require_site_admin(request.user)
+        payload = request.data if isinstance(request.data, dict) else {}
+        confirm_name = str(payload.get("confirm_name", ""))
+
+        def execute():
+            body = delete_board(
+                actor=request.user,
+                board_id=board_id,
+                confirm_name=confirm_name,
+            )
+            return 200, body
+
+        try:
+            result = run_idempotent(
+                actor=request.user,
+                endpoint=f"/api/v1/boards/{board_id}/delete",
+                key=request.headers.get("Idempotency-Key"),
+                payload=dict(payload),
+                handler=execute,
+                authorize_replay=lambda: require_site_admin(request.user),
+            )
+            return Response(result.body, status=result.status)
+        except BoardDeletionError as exc:
+            return Response(
+                {
+                    "code": exc.code,
+                    "message": exc.message,
+                    "field_errors": {},
+                    "request_id": None,
+                },
+                status=exc.status,
+            )
+        except IdempotencyError as exc:
+            return _idempotency_error(exc)
 
 
 class BoardMembershipCollectionView(APIView):

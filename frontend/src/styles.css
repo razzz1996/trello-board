@@ -519,3 +519,42 @@ tr:last-child td { border-bottom: 0; }
   .board-page__header { flex-direction: column; }
   .share-member { align-items: flex-start; flex-direction: column; }
 }
+
+/* Destructive board/card controls and recurrence settings */
+.board-tile-wrap {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+.board-tile-wrap .board-tile { height: 100%; }
+.board-delete-button { width: 100%; }
+
+.task-danger-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #fecdca;
+  color: #912018;
+}
+.task-danger-zone span { font-size: .86rem; }
+.recurrence-card-settings {
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+}
+
+@media (max-width: 700px) {
+  .task-danger-zone {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .recurrence-card-settings { grid-template-columns: 1fr; }
+}
+
+.task-card__repeat {
+  color: #3156c8;
+  font-size: .76rem;
+  font-weight: 700;
+  line-height: 1.3;
+}

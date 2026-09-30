@@ -1,7 +1,12 @@
 ﻿import { type FormEvent, useMemo, useState } from "react";
 
 import { commandTask } from "./api";
-import type { BoardSnapshot, SessionUser, Task } from "./types";
+import type {
+  BoardSnapshot,
+  RecurrenceFrequency,
+  SessionUser,
+  Task,
+} from "./types";
 import { Alert, errorMessage, formatDateTime } from "./ui";
 
 function localDateTimeInput(value: string | null): string {
@@ -27,9 +32,8 @@ export function TaskWorkspaceExtras({
 }) {
   return (
     <div className="task-extras">
-      {task.committed_at === null ? (
-        <DraftEditor task={task} snapshot={snapshot} onChanged={onChanged} />
-      ) : (
+      <DraftEditor task={task} snapshot={snapshot} onChanged={onChanged} />
+      {task.committed_at !== null && (
         <>
           {snapshot.membership.role === "MANAGER" && task.column_state !== "DONE" && (
             <CommitmentRevisionForm task={task} snapshot={snapshot} onChanged={onChanged} />
@@ -68,6 +72,13 @@ function DraftEditor({
   const [ownerId, setOwnerId] = useState(task.current_owner_id ?? "");
   const [due, setDue] = useState(localDateTimeInput(task.draft_due_at));
   const [criteria, setCriteria] = useState(task.draft_acceptance_criteria);
+  const [recurrence, setRecurrence] = useState<RecurrenceFrequency>(
+    task.recurrence_frequency,
+  );
+  const [recurrenceNext, setRecurrenceNext] = useState(
+    localDateTimeInput(task.recurrence_next_at),
+  );
+  const isCommitted = task.committed_at !== null;
   const [items, setItems] = useState<ChecklistDraft[]>(
     task.checklist_items.map((item) => ({
       text: item.text,
@@ -82,16 +93,26 @@ function DraftEditor({
     setBusy(true);
     setError("");
     try {
-      await commandTask(task.id, "edit_task", {
+      if (recurrence !== "NONE" && !recurrenceNext) {
+        setError("Choose when the card should become actionable again.");
+        return;
+      }
+      const payload: Record<string, unknown> = {
         expected_version: task.row_version,
         expected_board_revision: snapshot.revision,
         title,
         description,
-        priority,
-        owner_id: ownerId || null,
-        draft_due_at: due ? new Date(due).toISOString() : null,
-        draft_acceptance_criteria: criteria,
-      });
+        recurrence_frequency: recurrence,
+        recurrence_next_at:
+          recurrence === "NONE" ? null : new Date(recurrenceNext).toISOString(),
+      };
+      if (!isCommitted) {
+        payload.priority = priority;
+        payload.owner_id = ownerId || null;
+        payload.draft_due_at = due ? new Date(due).toISOString() : null;
+        payload.draft_acceptance_criteria = criteria;
+      }
+      await commandTask(task.id, "edit_task", payload);
       await onChanged();
       setOpen(false);
     } catch (caught) {
@@ -137,34 +158,71 @@ function DraftEditor({
             <label>Description
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} />
             </label>
-            <div className="form-grid">
-              <label>Priority
-                <select value={priority} onChange={(e) => setPriority(Number(e.target.value) as 1 | 2 | 3)}>
-                  <option value={1}>★</option><option value={2}>★★</option><option value={3}>★★★</option>
+            {!isCommitted && (
+              <>
+                <div className="form-grid">
+                  <label>Priority
+                    <select value={priority} onChange={(e) => setPriority(Number(e.target.value) as 1 | 2 | 3)}>
+                      <option value={1}>★</option><option value={2}>★★</option><option value={3}>★★★</option>
+                    </select>
+                  </label>
+                  <label>Owner
+                    <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
+                      <option value="">Unassigned</option>
+                      {snapshot.members.map((member) => (
+                        <option key={member.id} value={member.id}>{member.username}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>Due date
+                    <input type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} />
+                  </label>
+                </div>
+                <label>Notes / acceptance criteria
+                  <textarea value={criteria} onChange={(e) => setCriteria(e.target.value)} rows={4} />
+                </label>
+              </>
+            )}
+            <div className="form-grid recurrence-card-settings">
+              <label>Repeat
+                <select
+                  value={recurrence}
+                  onChange={(e) => setRecurrence(e.target.value as RecurrenceFrequency)}
+                >
+                  <option value="NONE">Does not repeat</option>
+                  <option value="DAILY">Daily</option>
+                  <option value="WEEKLY">Weekly</option>
+                  <option value="MONTHLY">Monthly</option>
                 </select>
               </label>
-              <label>Owner
-                <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
-                  <option value="">Unassigned</option>
-                  {snapshot.members.map((member) => (
-                    <option key={member.id} value={member.id}>{member.username}</option>
-                  ))}
-                </select>
-              </label>
-              <label>Due date
-                <input type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} />
-              </label>
+              {recurrence !== "NONE" && (
+                <label>Next action date and time
+                  <input
+                    type="datetime-local"
+                    value={recurrenceNext}
+                    onChange={(e) => setRecurrenceNext(e.target.value)}
+                    required
+                  />
+                </label>
+              )}
             </div>
-            <label>Notes / acceptance criteria
-              <textarea value={criteria} onChange={(e) => setCriteria(e.target.value)} rows={4} />
-            </label>
+            {recurrence !== "NONE" && (
+              <p className="field-help">
+                At this time the card returns to Inbox, completed checklist items reset,
+                and the following occurrence is scheduled automatically.
+              </p>
+            )}
             <button className="button button--primary" disabled={busy}>Save card details</button>
           </form>
-          <ChecklistStructureEditor items={items} setItems={setItems} />
-          <button className="button button--primary" type="button"
-            disabled={busy} onClick={() => void saveChecklist()}>
-            Save checklist
-          </button>
+          {!isCommitted && (
+            <>
+              <ChecklistStructureEditor items={items} setItems={setItems} />
+              <button className="button button--primary" type="button"
+                disabled={busy} onClick={() => void saveChecklist()}>
+                Save checklist
+              </button>
+            </>
+          )}
         </div>
       )}
     </section>

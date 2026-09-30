@@ -105,3 +105,13 @@ Escalate immediately for:
 - private TLS/trust failure on an authorised client
 - any suspected credential/token exposure
 
+
+## Board, card, and recurrence operations
+
+- Only active administrators may create or permanently delete boards.
+- Board deletion requires typing the exact board name. It removes the board, cards, schedules, occurrences, task notifications, and task activity stored under that board. Report snapshots remain immutable historical records.
+- Any active user may permanently delete a card from Card details. Card deletion uses task and board version checks so a stale browser cannot silently remove a newer card state.
+- A card may repeat daily, weekly, or monthly. The user must choose the next action date and time.
+- When the scheduler observes that date, it enqueues a generation-scoped recurrence job. The worker moves the same card back to Inbox, clears the old commitment/current submission state, resets checked checklist items, and advances the next action date.
+- Monthly repetition preserves the selected day where possible and uses the final valid day in shorter months.
+- If the host was offline at the action time, the next scheduler pass processes the overdue occurrence and advances the schedule to the next future date.

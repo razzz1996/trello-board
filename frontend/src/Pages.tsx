@@ -1,7 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { createBoard, getBoards, getTasks } from "./api";
+import { createBoard, deleteBoard, getBoards, getTasks } from "./api";
 import { AdminControls } from "./AdminControls";
 import type { BoardSummary, SessionUser, Task } from "./types";
 import {
@@ -81,6 +81,27 @@ export function BoardsPage({ user }: { user: SessionUser }) {
     }
   }
 
+  async function removeBoard(board: BoardSummary) {
+    const typed = window.prompt(
+      `Permanently delete "${board.name}" and every card in it? Type the exact board name to confirm.`,
+    );
+    if (typed === null) return;
+    if (typed !== board.name) {
+      setError("Board name did not match. Nothing was deleted.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await deleteBoard(board.id, typed);
+      setBoards((current) => current.filter((item) => item.id !== board.id));
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section>
       <div className="page-heading">
@@ -136,10 +157,22 @@ export function BoardsPage({ user }: { user: SessionUser }) {
       )}
       <div className="board-grid">
         {boards.map((board) => (
-          <Link key={board.id} className="board-tile" to={`/boards/${board.id}`}>
-            <div className="board-tile__title">{board.name}</div>
-            <div className="board-tile__meta">{board.archived ? "Archived" : "Open board"}</div>
-          </Link>
+          <article key={board.id} className="board-tile-wrap">
+            <Link className="board-tile" to={`/boards/${board.id}`}>
+              <div className="board-tile__title">{board.name}</div>
+              <div className="board-tile__meta">{board.archived ? "Archived" : "Open board"}</div>
+            </Link>
+            {user.is_admin && (
+              <button
+                className="button button--danger board-delete-button"
+                type="button"
+                disabled={busy}
+                onClick={() => void removeBoard(board)}
+              >
+                Delete board
+              </button>
+            )}
+          </article>
         ))}
       </div>
     </section>

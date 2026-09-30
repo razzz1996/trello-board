@@ -1,0 +1,13 @@
+﻿{
+    "captured_at":  "2026-09-30T01:23:25.7908278Z",
+    "ok":  true,
+    "admin_board_create":  201,
+    "member_board_visibility":  200,
+    "member_card_create":  201,
+    "recurrence_configure":  200,
+    "recurrence_job":  "SUCCEEDED",
+    "recurrence_returned_to":  "BACKLOG",
+    "member_card_delete":  200,
+    "member_board_delete":  403,
+    "admin_board_delete":  200
+}

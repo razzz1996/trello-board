@@ -10,6 +10,12 @@ from django.db.models import Q
 
 
 class Task(models.Model):
+    class Recurrence(models.TextChoices):
+        NONE = "NONE", "Does not repeat"
+        DAILY = "DAILY", "Daily"
+        WEEKLY = "WEEKLY", "Weekly"
+        MONTHLY = "MONTHLY", "Monthly"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     board = models.ForeignKey("boards.Board", on_delete=models.PROTECT, related_name="tasks")
     column = models.ForeignKey("boards.BoardColumn", on_delete=models.PROTECT, related_name="tasks")
@@ -36,6 +42,15 @@ class Task(models.Model):
     position = models.PositiveIntegerField(default=0)
     draft_due_at = models.DateTimeField(null=True, blank=True)
     draft_acceptance_criteria = models.TextField(max_length=10000, blank=True)
+    recurrence_frequency = models.CharField(
+        max_length=16,
+        choices=Recurrence.choices,
+        default=Recurrence.NONE,
+    )
+    recurrence_next_at = models.DateTimeField(null=True, blank=True)
+    recurrence_last_triggered_at = models.DateTimeField(null=True, blank=True)
+    recurrence_anchor_day = models.PositiveSmallIntegerField(null=True, blank=True)
+    recurrence_generation = models.PositiveIntegerField(default=1)
     committed_at = models.DateTimeField(null=True, blank=True)
     current_commitment = models.ForeignKey(
         "CommitmentRevision", null=True, blank=True, on_delete=models.PROTECT, related_name="+"
@@ -55,6 +70,27 @@ class Task(models.Model):
                 condition=Q(priority__gte=1, priority__lte=3), name="task_priority_1_3"
             ),
             models.CheckConstraint(condition=Q(row_version__gte=1), name="task_version_positive"),
+            models.CheckConstraint(
+                condition=Q(recurrence_generation__gte=1),
+                name="task_recurrence_generation_positive",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(recurrence_anchor_day__isnull=True)
+                    | Q(recurrence_anchor_day__gte=1, recurrence_anchor_day__lte=31)
+                ),
+                name="task_recurrence_anchor_day_1_31",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(
+                        recurrence_frequency="NONE",
+                        recurrence_next_at__isnull=True,
+                    )
+                    | (~Q(recurrence_frequency="NONE") & Q(recurrence_next_at__isnull=False))
+                ),
+                name="task_recurrence_configuration_valid",
+            ),
             models.UniqueConstraint(
                 fields=["column", "position"],
                 condition=Q(is_cancelled=False),
@@ -65,6 +101,10 @@ class Task(models.Model):
             models.Index(fields=["board", "column"]),
             models.Index(fields=["current_owner", "is_cancelled"]),
             models.Index(fields=["priority", "is_cancelled"]),
+            models.Index(
+                fields=["recurrence_frequency", "recurrence_next_at"],
+                name="workitems_recurrence_due_idx",
+            ),
         ]
 
 

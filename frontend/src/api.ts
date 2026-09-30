@@ -156,6 +156,20 @@ export async function createBoard(name: string, managerUserIds: string[] = []): 
   );
 }
 
+export async function deleteBoard(
+  boardId: string,
+  confirmName: string,
+): Promise<{ deleted: boolean; board_id: string; board_name: string }> {
+  return request(
+    `/api/v1/boards/${encodeURIComponent(boardId)}/delete`,
+    {
+      method: "POST",
+      body: JSON.stringify({ confirm_name: confirmName }),
+    },
+    { idempotentMutation: true },
+  );
+}
+
 export async function getBoardSnapshot(
   boardId: string,
   knownRevision?: number,
@@ -223,6 +237,23 @@ export async function commandTask(
 }
 
 
+export async function deleteTask(
+  taskId: string,
+  expectedVersion: number,
+  expectedBoardRevision: number,
+): Promise<{ deleted: boolean; task_id: string; board_id: string; board_revision: number }> {
+  return request(
+    `/api/v1/tasks/${encodeURIComponent(taskId)}/delete`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        expected_version: expectedVersion,
+        expected_board_revision: expectedBoardRevision,
+      }),
+    },
+    { idempotentMutation: true },
+  );
+}
 export async function getAdminUsers(): Promise<AdminUser[]> {
   return request<AdminUser[]>("/api/v1/admin/users");
 }

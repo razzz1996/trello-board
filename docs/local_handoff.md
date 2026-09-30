@@ -38,7 +38,7 @@ The Stop launcher stops the local web, scheduler, worker, and proxy processes. P
 
 Latest full verifier evidence:
 
-- `evidence/verify_all_20260929T074944Z.json`
+- `evidence/verify_all_20260930T012020Z.json`
 - `evidence/local_restart_cycle_20260929T054104Z.json`
 
 The latest full verifier passed:
@@ -53,8 +53,9 @@ The latest full verifier passed:
 - npm audit: 0 vulnerabilities
 - calendar fixtures
 - PostgreSQL connectivity
-- full automated test suite: 76 passing tests
+- full automated test suite: 87 passing tests
 - live API route matrix and end-to-end task workflow
+- live admin board deletion, member card deletion, and recurrence execution
 - live admin state changes with audit persistence
 - database integrity audit with no issues
 - local stop -> cold start -> readiness cycle
@@ -73,6 +74,10 @@ The runtime readiness endpoint currently reports healthy database, scheduler, an
 - five-list Trello-style workflow: Inbox, To Do, In Progress, Later, Done
 - quick Inbox capture with title-first card creation
 - free drag/reorder between the five everyday lists
+- administrator-only permanent board deletion with exact-name confirmation
+- permanent card deletion available to every board user, with optimistic concurrency protection
+- card-level daily, weekly, and monthly repetition with a user-selected next action date
+- due repeating cards automatically return to Inbox, reset checklist completion, and schedule the following occurrence
 - task commitments and commitment revisions remain available as optional audited workflow
 - checklist baselines
 - optional submissions and independent review without blocking ordinary drag-to-Done behavior

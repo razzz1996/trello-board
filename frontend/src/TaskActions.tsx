@@ -1,6 +1,6 @@
 ﻿import { type FormEvent, useState } from "react";
 
-import { commandTask, createTask } from "./api";
+import { commandTask, createTask, deleteTask } from "./api";
 import { TaskWorkspaceExtras } from "./TaskWorkspaceExtras";
 import type { BoardSnapshot, SessionUser, Task } from "./types";
 import {
@@ -355,16 +355,19 @@ export function TaskDetailModal({
   currentUser,
   onClose,
   onChanged,
+  onDeleted,
 }: {
   task: Task;
   snapshot: BoardSnapshot;
   currentUser: SessionUser;
   onClose: () => void;
   onChanged: () => Promise<void>;
+  onDeleted: () => Promise<void>;
 }) {
   const member = snapshot.members.find((item) => item.id === task.current_owner_id);
   const [error, setError] = useState("");
   const [busyItem, setBusyItem] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   async function toggleChecklist(itemId: string, checked: boolean) {
     setBusyItem(itemId);
@@ -384,6 +387,19 @@ export function TaskDetailModal({
     }
   }
 
+  async function removeCard() {
+    if (!window.confirm(`Delete "${task.title}" permanently? This cannot be undone.`)) return;
+    setDeleting(true);
+    setError("");
+    try {
+      await deleteTask(task.id, task.row_version, snapshot.revision);
+      await onDeleted();
+    } catch (caught) {
+      setError(errorMessage(caught));
+      setDeleting(false);
+    }
+  }
+
   return (
     <Modal title={task.title} onClose={onClose}>
       {error && <Alert>{error}</Alert>}
@@ -398,6 +414,18 @@ export function TaskDetailModal({
         <dt>List</dt><dd>{taskStateLabel(task.column_state)}</dd>
         <dt>Owner</dt><dd>{member?.username ?? "Unassigned"}</dd>
         <dt>Due date</dt><dd>{formatDateTime(taskDue(task))}</dd>
+        <dt>Repeats</dt>
+        <dd>
+          {task.recurrence_frequency === "NONE"
+            ? "Does not repeat"
+            : task.recurrence_frequency.toLowerCase()}
+        </dd>
+        {task.recurrence_frequency !== "NONE" && (
+          <>
+            <dt>Next action</dt>
+            <dd>{formatDateTime(task.recurrence_next_at)}</dd>
+          </>
+        )}
         <dt>Description</dt><dd>{task.description || "No description yet."}</dd>
       </dl>
       {task.checklist_items.length > 0 && (
@@ -423,6 +451,17 @@ export function TaskDetailModal({
         currentUser={currentUser}
         onChanged={onChanged}
       />
+      <div className="task-danger-zone">
+        <span>Remove this card from the board.</span>
+        <button
+          className="button button--danger"
+          type="button"
+          disabled={deleting}
+          onClick={() => void removeCard()}
+        >
+          {deleting ? "Deleting…" : "Delete card"}
+        </button>
+      </div>
     </Modal>
   );
 }

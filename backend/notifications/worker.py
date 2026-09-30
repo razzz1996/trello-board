@@ -7,6 +7,7 @@ from core.clock import now
 from django.conf import settings
 from django.db import DatabaseError
 from schedules.generation import generate_schedule_batch
+from workitems.recurrence import trigger_recurrence
 
 from . import jobs
 from .digest import create_personal_digest
@@ -38,6 +39,18 @@ def process_lease(lease: jobs.Lease) -> None:
             return
         generate_schedule_batch(schedule_id, limit=100)
         jobs.succeed(job.id, lease.token)
+        return
+
+    if job.job_type == "task_recurrence":
+        task_id = job.payload.get("task_id")
+        generation = job.payload.get("generation")
+        if not task_id or not isinstance(generation, int):
+            jobs.fail_permanent(job.id, lease.token, code="task_recurrence_payload_invalid")
+            return
+        if trigger_recurrence(task_id=task_id, generation=generation):
+            jobs.succeed(job.id, lease.token)
+        else:
+            jobs.suppress(job.id, lease.token, code="stale_task_recurrence")
         return
 
     if job.job_type in TASK_NOTIFICATION_TYPES:

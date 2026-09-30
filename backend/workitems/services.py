@@ -26,6 +26,7 @@ from .models import (
     Submission,
     Task,
 )
+from .recurrence import configure_recurrence
 
 User = get_user_model()
 TEMP_POSITION_OFFSET = 1_000_000
@@ -46,6 +47,11 @@ def _serialize_task(task: Task) -> dict[str, Any]:
         "is_cancelled": task.is_cancelled,
         "commitment_revision": commitment.revision if commitment else None,
         "due_at": commitment.due_at.isoformat() if commitment else None,
+        "recurrence_frequency": task.recurrence_frequency,
+        "recurrence_next_at": (
+            task.recurrence_next_at.isoformat() if task.recurrence_next_at else None
+        ),
+        "recurrence_generation": task.recurrence_generation,
     }
 
 
@@ -267,6 +273,9 @@ def edit_task(
     owner_id=None,
     draft_due_at: datetime | None = None,
     draft_acceptance_criteria: str | None = None,
+    recurrence_update: bool = False,
+    recurrence_frequency: str | None = None,
+    recurrence_next_at: datetime | None = None,
 ) -> Task:
     with transaction.atomic():
         board, task = _board_and_task_for_update(task_id)
@@ -307,6 +316,13 @@ def edit_task(
                 raise DomainError(
                     "priority_requires_due", "Three-star draft tasks require a deadline."
                 )
+
+        if recurrence_update:
+            configure_recurrence(
+                task,
+                frequency=recurrence_frequency or Task.Recurrence.NONE,
+                next_at=recurrence_next_at,
+            )
 
         _bump(board, task)
         task.save()
@@ -351,9 +367,13 @@ def commit_task(
             raise DomainError("criteria_required", "Measurable acceptance criteria are required.")
 
         before = _serialize_task(task)
+        previous_revision = (
+            CommitmentRevision.objects.filter(task=task).aggregate(value=Max("revision"))["value"]
+            or 0
+        )
         commitment = CommitmentRevision.objects.create(
             task=task,
-            revision=1,
+            revision=previous_revision + 1,
             owner=owner,
             due_at=chosen_due,
             priority=task.priority,
@@ -450,9 +470,7 @@ def set_checklist_item(
         require_board_member(actor, board.id, for_update=True)
         _require_expected(task, board, expected_version, expected_board_revision)
         if task.is_cancelled:
-            raise DomainError(
-                "checklist_locked", "Cancelled cards cannot be updated.", status=409
-            )
+            raise DomainError("checklist_locked", "Cancelled cards cannot be updated.", status=409)
         item = ChecklistItem.objects.select_for_update().filter(pk=item_id, task=task).first()
         if item is None:
             raise DomainError("not_found", "Checklist item not found.", status=404)

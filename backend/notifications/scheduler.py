@@ -7,6 +7,7 @@ from accounts.models import User
 from core.clock import now
 from django.conf import settings
 from schedules.models import Schedule
+from workitems.models import Task
 
 from .jobs import enqueue_job
 from .models import WorkerHeartbeat
@@ -34,6 +35,38 @@ def scheduler_tick() -> dict[str, int]:
             generation=schedule.generation,
         )
         recurrence_count += 1
+
+    task_recurrence_count = 0
+    due_cards = (
+        Task.objects.filter(
+            recurrence_next_at__lte=observed_at,
+            is_cancelled=False,
+            board__archived=False,
+        )
+        .exclude(recurrence_frequency=Task.Recurrence.NONE)
+        .only(
+            "id",
+            "recurrence_generation",
+            "recurrence_next_at",
+        )[:500]
+    )
+    for task in due_cards:
+        if task.recurrence_next_at is None:
+            continue
+        enqueue_job(
+            semantic_key=(
+                f"task-recurrence:{task.id}:{task.recurrence_generation}:"
+                f"{task.recurrence_next_at.isoformat()}"
+            ),
+            job_type="task_recurrence",
+            run_after=observed_at,
+            payload={
+                "task_id": str(task.id),
+                "generation": task.recurrence_generation,
+            },
+            generation=task.recurrence_generation,
+        )
+        task_recurrence_count += 1
 
     digest_count = 0
     workdays = set(settings.DEPLOYMENT["workdays_iso"])
@@ -80,6 +113,7 @@ def scheduler_tick() -> dict[str, int]:
             "last_seen_at": observed_at,
             "details": {
                 "recurrence_enqueued": recurrence_count,
+                "task_recurrence_enqueued": task_recurrence_count,
                 "digest_enqueued": digest_count,
                 "manager_report_enqueued": manager_count,
             },
@@ -87,6 +121,7 @@ def scheduler_tick() -> dict[str, int]:
     )
     return {
         "recurrence_enqueued": recurrence_count,
+        "task_recurrence_enqueued": task_recurrence_count,
         "digest_enqueued": digest_count,
         "manager_report_enqueued": manager_count,
     }

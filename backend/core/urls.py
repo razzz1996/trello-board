@@ -6,6 +6,7 @@ from accounts.api import (
     SessionLogoutView,
 )
 from boards.api import (
+    BoardDeleteView,
     BoardListCreateView,
     BoardMembershipCollectionView,
     BoardMembershipCommandView,
@@ -15,7 +16,7 @@ from django.urls import path
 from notifications.api import NotificationInboxView, NotificationReadView
 from reports.api import ReportCollectionView, ReportDetailView
 from schedules.api import ScheduleCollectionView, ScheduleCommandView, SchedulePreviewView
-from workitems.api import TaskCollectionView, TaskCommandView
+from workitems.api import TaskCollectionView, TaskCommandView, TaskDeleteView
 
 from .views import csrf_bootstrap, current_user, health_detail, liveness, readiness
 
@@ -39,6 +40,11 @@ urlpatterns = [
         "boards/<uuid:board_id>/snapshot",
         BoardSnapshotView.as_view(),
         name="board-snapshot",
+    ),
+    path(
+        "boards/<uuid:board_id>/delete",
+        BoardDeleteView.as_view(),
+        name="board-delete",
     ),
     path(
         "boards/<uuid:board_id>/memberships",
@@ -66,6 +72,11 @@ urlpatterns = [
         name="schedule-command",
     ),
     path("tasks", TaskCollectionView.as_view(), name="tasks"),
+    path(
+        "tasks/<uuid:task_id>/delete",
+        TaskDeleteView.as_view(),
+        name="task-delete",
+    ),
     path(
         "tasks/<uuid:task_id>/commands/<str:command>",
         TaskCommandView.as_view(),

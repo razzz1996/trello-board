@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from . import services
+from .deletion import delete_task
 from .errors import DomainError
 from .models import Task
 from .serializers import TaskSerializer
@@ -140,6 +141,44 @@ class TaskCollectionView(APIView):
             return _error(exc.code, exc.message, exc.status)
 
 
+class TaskDeleteView(APIView):
+    def post(self, request, task_id):
+        payload = request.data if isinstance(request.data, dict) else {}
+        try:
+            expected_version = int(payload["expected_version"])
+            expected_board_revision = int(payload["expected_board_revision"])
+
+            def execute():
+                body = delete_task(
+                    actor=request.user,
+                    task_id=task_id,
+                    expected_version=expected_version,
+                    expected_board_revision=expected_board_revision,
+                )
+                return 200, body
+
+            result = run_idempotent(
+                actor=request.user,
+                endpoint=f"/api/v1/tasks/{task_id}/delete",
+                key=request.headers.get("Idempotency-Key"),
+                payload=dict(payload),
+                handler=execute,
+            )
+            return Response(result.body, status=result.status)
+        except KeyError:
+            return _error(
+                "version_required",
+                "expected_version and expected_board_revision are required.",
+                400,
+            )
+        except ValueError:
+            return _error("invalid_version", "Expected versions must be integers.", 400)
+        except DomainError as exc:
+            return _error(exc.code, exc.message, exc.status, exc.field_errors)
+        except IdempotencyError as exc:
+            return _error(exc.code, exc.message, exc.status)
+
+
 MANAGER_COMMANDS = {
     "commit_task",
     "revise_commitment",
@@ -226,6 +265,7 @@ class TaskCommandView(APIView):
             "expected_board_revision": expected_board_revision,
         }
         if command == "edit_task":
+            recurrence_update = "recurrence_frequency" in payload or "recurrence_next_at" in payload
             return services.edit_task(
                 **common,
                 title=payload.get("title"),
@@ -237,6 +277,12 @@ class TaskCommandView(APIView):
                     "draft_due_at",
                 ),
                 draft_acceptance_criteria=payload.get("draft_acceptance_criteria"),
+                recurrence_update=recurrence_update,
+                recurrence_frequency=payload.get("recurrence_frequency"),
+                recurrence_next_at=_datetime(
+                    payload.get("recurrence_next_at"),
+                    "recurrence_next_at",
+                ),
             )
         if command == "move_task":
             return services.move_task(

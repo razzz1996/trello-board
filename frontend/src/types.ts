@@ -1,5 +1,6 @@
 ﻿export type Role = "MEMBER" | "MANAGER";
 export type TaskState = "BACKLOG" | "TODO" | "IN_PROGRESS" | "BLOCKED" | "REVIEW" | "DONE";
+export type RecurrenceFrequency = "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
 
 export interface SessionUser {
   id: string;
@@ -124,6 +125,10 @@ export interface Task {
   position: number;
   draft_due_at: string | null;
   draft_acceptance_criteria: string;
+  recurrence_frequency: RecurrenceFrequency;
+  recurrence_next_at: string | null;
+  recurrence_last_triggered_at: string | null;
+  recurrence_generation: number;
   committed_at: string | null;
   current_commitment: Commitment | null;
   is_cancelled: boolean;
