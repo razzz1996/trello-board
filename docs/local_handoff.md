@@ -40,8 +40,9 @@ The stop launchers stop the relevant web, scheduler, worker, proxy, and Vite pro
 
 Latest full verifier evidence:
 
-- `evidence/verify_all_20260930T014949Z.json`
+- `evidence/verify_all_20260930T022106Z.json`
 - `evidence/lan_access_20260930T015111Z.json`
+- `evidence/lan_login_throttle_20260930T021959Z.json`
 - `evidence/local_restart_cycle_20260929T054104Z.json`
 
 The latest full verifier passed:
@@ -56,10 +57,11 @@ The latest full verifier passed:
 - npm audit: 0 vulnerabilities
 - calendar fixtures
 - PostgreSQL connectivity
-- full automated test suite: 87 passing tests
+- full automated test suite: 89 passing tests
 - live API route matrix and end-to-end task workflow
 - live admin board deletion, member card deletion, and recurrence execution
 - live admin state changes with audit persistence
+- LAN login throttling isolates five-attempt account locks without blocking other office users
 - database integrity audit with no issues
 - local stop -> cold start -> readiness cycle
 

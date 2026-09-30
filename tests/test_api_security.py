@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import pytest
 from accounts.models import AccountAuditEvent
+from accounts.throttle import client_address
 from boards.models import Board, BoardColumn, BoardMembership
 from django.contrib.auth import get_user_model
+from django.test import RequestFactory
 from rest_framework.test import APIClient
 
 User = get_user_model()
@@ -483,3 +485,54 @@ def test_new_user_is_automatically_added_to_existing_boards():
     membership = BoardMembership.objects.get(board=board, user=member)
     assert membership.is_active is True
     assert membership.role == BoardMembership.Role.MEMBER
+
+
+def test_five_failures_do_not_lock_other_account_on_shared_office_address():
+    first = User.objects.create_user(
+        username="shared-address-first",
+        password=TEST_PASSWORD,
+        force_password_change=False,
+    )
+    second = User.objects.create_user(
+        username="shared-address-second",
+        password=TEST_PASSWORD,
+        force_password_change=False,
+    )
+    client = APIClient(enforce_csrf_checks=True)
+    client.get("/api/v1/session/csrf/")
+    csrf_token = client.cookies["csrftoken"].value
+
+    for _ in range(5):
+        response = client.post(
+            "/api/v1/session/login",
+            {"username": first.username, "password": "incorrect-value"},
+            format="json",
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+        assert response.status_code == 401
+
+    allowed = client.post(
+        "/api/v1/session/login",
+        {"username": second.username, "password": TEST_PASSWORD},
+        format="json",
+        HTTP_X_CSRFTOKEN=csrf_token,
+    )
+    assert allowed.status_code == 200
+    assert allowed.json()["username"] == second.username
+
+
+def test_client_address_normalizes_vite_forwarded_ipv4_and_rejects_spoofing():
+    factory = RequestFactory()
+    proxied = factory.get(
+        "/",
+        REMOTE_ADDR="127.0.0.1",
+        HTTP_X_FORWARDED_FOR="203.0.113.10, ::ffff:172.16.0.222",
+    )
+    assert client_address(proxied) == "172.16.0.222"
+
+    direct = factory.get(
+        "/",
+        REMOTE_ADDR="172.16.0.55",
+        HTTP_X_FORWARDED_FOR="203.0.113.10",
+    )
+    assert client_address(direct) == "172.16.0.55"
