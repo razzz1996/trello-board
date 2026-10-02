@@ -1,3 +1,5 @@
+import { createIdempotencyKey } from "./idempotency";
+
 import type {
   AdminUser,
   ApiErrorBody,
@@ -80,7 +82,7 @@ async function request<T>(
   }
 
   if (options.idempotentMutation) {
-    headers.set("Idempotency-Key", crypto.randomUUID());
+    headers.set("Idempotency-Key", createIdempotencyKey());
   }
 
   const response = await fetch(path, {

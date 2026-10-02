@@ -165,6 +165,12 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_SECURE = ENVIRONMENT == "pilot"
+# Keep authenticated users signed in with a sliding, effectively non-expiring session.
+# Explicit sign-out, password reset, account disable, and session-generation revocation
+# still invalidate access immediately.
+SESSION_COOKIE_AGE = 10 * 365 * 24 * 60 * 60
+SESSION_SAVE_EVERY_REQUEST = True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 CSRF_COOKIE_SECURE = ENVIRONMENT == "pilot"
 SECURE_SSL_REDIRECT = ENVIRONMENT == "pilot"
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") if ENVIRONMENT == "pilot" else None

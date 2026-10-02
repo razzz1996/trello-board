@@ -4,6 +4,7 @@ import pytest
 from accounts.models import AccountAuditEvent
 from accounts.throttle import client_address
 from boards.models import Board, BoardColumn, BoardMembership
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory
 from rest_framework.test import APIClient
@@ -536,3 +537,9 @@ def test_client_address_normalizes_vite_forwarded_ipv4_and_rejects_spoofing():
         HTTP_X_FORWARDED_FOR="203.0.113.10",
     )
     assert client_address(direct) == "172.16.0.55"
+
+
+def test_sessions_are_persistent_and_sliding():
+    assert settings.SESSION_COOKIE_AGE >= 10 * 365 * 24 * 60 * 60
+    assert settings.SESSION_SAVE_EVERY_REQUEST is True
+    assert settings.SESSION_EXPIRE_AT_BROWSER_CLOSE is False

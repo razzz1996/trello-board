@@ -40,7 +40,7 @@ The stop launchers stop the relevant web, scheduler, worker, proxy, and Vite pro
 
 Latest full verifier evidence:
 
-- `evidence/verify_all_20261002T051312Z.json`
+- `evidence/verify_all_20261002T074348Z.json`
 - `evidence/lan_access_20261002T051351Z.json`
 - `evidence/lan_login_throttle_20260930T021959Z.json`
 - `evidence/local_restart_cycle_20260929T054104Z.json`
@@ -57,7 +57,9 @@ The latest full verifier passed:
 - npm audit: 0 vulnerabilities
 - calendar fixtures
 - PostgreSQL connectivity
-- full automated test suite: 89 passing tests
+- full automated test suite: 90 passing tests
+- frontend UUID compatibility tests: 3 passing tests
+- live LAN login, persistent-session, card-create, card-move, and card-delete workflow
 - live API route matrix and end-to-end task workflow
 - live admin board deletion, member card deletion, and recurrence execution
 - live admin state changes with audit persistence
@@ -70,6 +72,8 @@ The runtime readiness endpoint currently reports healthy database, scheduler, an
 ## Implemented functional areas
 
 - local username/password authentication and forced-password-change workflow
+- sliding 10-year persistent sessions; explicit logout, password reset, disable, and generation revocation still invalidate access
+- LAN-safe idempotency-key generation for browsers where `crypto.randomUUID` is unavailable
 - administrator account management with last-admin protection
 - administrator-only board creation
 - every active user automatically receives access to every board
