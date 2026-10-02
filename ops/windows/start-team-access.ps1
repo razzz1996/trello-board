@@ -1,10 +1,16 @@
 param(
     [string]$ProjectRoot = "C:\Users\PC 19\Desktop\PRODUCTIVITY WEBSITE",
-    [string]$LanHost = "172.16.0.222",
+    [string]$LanHost = "",
     [int]$Port = 5173
 )
 $ErrorActionPreference = "Stop"
 Set-Location $ProjectRoot
+
+. (Join-Path $ProjectRoot "ops\windows\lan-network.ps1")
+$lan = Get-ProductivityLanBinding
+if (-not $LanHost) {
+    $LanHost = $lan.Host
+}
 
 & (Join-Path $ProjectRoot "ops\windows\start-local.ps1") -ProjectRoot $ProjectRoot
 
@@ -15,7 +21,6 @@ if ($listener) {
     }
     Start-Sleep -Milliseconds 500
 }
-
 $runner = Join-Path $ProjectRoot "ops\windows\run-vite-lan.ps1"
 Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @(
     "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ('"' + $runner + '"'),
@@ -31,7 +36,7 @@ do {
         if ($ready.status -eq "ready") {
             Start-Process $url
             Write-Host "eMEGA team access is ready: $url" -ForegroundColor Green
-            Write-Host "Only devices on the local 172.16.0.0/23 network are allowed." -ForegroundColor DarkGray
+            Write-Host "Allowed office subnet: $($lan.NetworkCidr)" -ForegroundColor DarkGray
             exit 0
         }
     } catch {
@@ -39,4 +44,4 @@ do {
     }
 } while ((Get-Date) -lt $deadline)
 
-throw "LAN access did not become ready within 25 seconds."
+throw "LAN access did not become ready within 25 seconds for $url"

@@ -1,4 +1,4 @@
-﻿# Environment Inventory
+# Environment Inventory
 
 Observed: 2026-09-29, Asia/Manila project timezone
 Authorized project path: C:\Users\PC 19\Desktop\PRODUCTIVITY WEBSITE
@@ -12,7 +12,7 @@ Authorized project path: C:\Users\PC 19\Desktop\PRODUCTIVITY WEBSITE
 - Active power plan: Balanced
 - AC sleep: disabled; AC hibernate: disabled
 - Windows time source: time.windows.com; status reported not synchronized during S00 although a successful sync was recorded at 07:46 on 2026-09-29
-- Local IPv4 observed by Windows listener inventory: 172.16.0.222 (not approved as a deployment address)
+- Local IPv4 observed by Windows listener inventory: 172.16.0.178 (current DHCP-assigned office LAN address)
 
 ## Tooling
 - Python 3.14.7 installed for current user

@@ -3,11 +3,14 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $ProjectRoot "ops\windows\lan-network.ps1")
+$lan = Get-ProductivityLanBinding
+
 $env:PRODUCTIVITY_DB_USER = "productivity_app"
 $env:PRODUCTIVITY_DB_PASSWORD_FILE = Join-Path $ProjectRoot "runtime\secrets\postgres_app_secret.txt"
 $env:PRODUCTIVITY_DB_HOST = "127.0.0.1"
 $env:PRODUCTIVITY_DB_PORT = "5432"
-$env:PRODUCTIVITY_LAN_HOST = "172.16.0.222"
+$env:PRODUCTIVITY_LAN_HOST = $lan.Host
 $env:PRODUCTIVITY_MAINTENANCE_DB_USER = "productivity_maintenance"
 $env:PRODUCTIVITY_MAINTENANCE_DB_PASSWORD_FILE = Join-Path $ProjectRoot "runtime\secrets\postgres_maintenance_secret.txt"
 $env:PYTHONPATH = Join-Path $ProjectRoot "backend"

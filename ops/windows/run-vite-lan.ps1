@@ -1,9 +1,14 @@
 param(
     [string]$ProjectRoot = "C:\Users\PC 19\Desktop\PRODUCTIVITY WEBSITE",
-    [string]$LanHost = "172.16.0.222",
+    [string]$LanHost = "",
     [int]$Port = 5173
 )
 $ErrorActionPreference = "Stop"
+
+if (-not $LanHost) {
+    . (Join-Path $ProjectRoot "ops\windows\lan-network.ps1")
+    $LanHost = (Get-ProductivityLanBinding).Host
+}
 
 Set-Location (Join-Path $ProjectRoot "frontend")
 $npm = "C:\Program Files\nodejs\npm.cmd"

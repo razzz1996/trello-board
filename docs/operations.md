@@ -5,7 +5,7 @@
 - Application root: C:\Users\PC 19\Desktop\PRODUCTIVITY WEBSITE
 - Web application server: Waitress on 127.0.0.1:8000
 - Development reverse proxy: Caddy on 127.0.0.1:8080
-- Team LAN frontend: Vite on 172.16.0.222:5173
+- Team LAN frontend: Vite on 172.16.0.178:5173
 - Windows Firewall scope: TCP 5173 from 172.16.0.0/23 only
 - PostgreSQL 18.6: loopback only on 127.0.0.1 and ::1 port 5432
 - Scheduler and worker: Python management commands with database-backed heartbeats
@@ -52,9 +52,9 @@ Host-only development/manual:
 
 Office LAN access:
 1. Double-click `Start eMEGA Team Access.cmd` on the desktop.
-2. Share `http://172.16.0.222:5173/` with users on the same office subnet.
+2. Share `http://172.16.0.178:5173/` with users on the same office subnet.
 3. Use `Stop eMEGA Team Access.cmd` before maintenance or when LAN access is no longer needed.
-4. If the host's Ethernet address changes, update `PRODUCTIVITY_LAN_HOST`, the Vite launcher, and the scoped firewall rule before restarting.
+4. The Team Access launcher detects the current Ethernet address automatically. If the office subnet itself changes, rerun the scoped firewall configuration before restarting.
 
 Pilot supervision is not yet configured. S18 requires a restricted service identity plus reboot, logoff and forced-failure recovery verification.
 

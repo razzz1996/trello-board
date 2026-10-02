@@ -1,0 +1,26 @@
+﻿{
+    "captured_at":  "2026-10-02T05:13:51.0419147Z",
+    "url":  "http://172.16.0.178:5173/",
+    "host_ip":  "172.16.0.178",
+    "root_http":  200,
+    "readiness_http":  200,
+    "listener":  {
+                     "local_address":  "172.16.0.178",
+                     "local_port":  5173,
+                     "owning_process":  25648
+                 },
+    "firewall":  {
+                     "enabled":  "True",
+                     "action":  "Allow",
+                     "local_address":  "Any",
+                     "remote_address":  "172.16.0.0/255.255.254.0",
+                     "local_port":  "5173"
+                 },
+    "authenticated_session_smoke":  {
+                                        "csrf_status":  200,
+                                        "session_status":  200,
+                                        "logout_status":  204,
+                                        "result":  "passed"
+                                    },
+    "full_verifier":  "evidence/verify_all_20261002T051312Z.json"
+}
