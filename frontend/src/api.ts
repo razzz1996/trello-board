@@ -1,5 +1,8 @@
 import { createIdempotencyKey } from "./idempotency";
 
+const CSRF_COOKIE_NAME = "emega_productivity_csrftoken";
+export const AUTH_INVALID_EVENT = "emega:auth-invalid";
+
 import type {
   AdminUser,
   ApiErrorBody,
@@ -70,11 +73,11 @@ async function request<T>(
   }
 
   if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
-    const csrf = cookie("csrftoken");
+    const csrf = cookie(CSRF_COOKIE_NAME);
     if (!csrf) {
       await bootstrapCsrf();
     }
-    const refreshed = cookie("csrftoken");
+    const refreshed = cookie(CSRF_COOKIE_NAME);
     if (!refreshed) {
       throw new Error("CSRF token is unavailable.");
     }
@@ -93,6 +96,16 @@ async function request<T>(
 
   if (!response.ok) {
     const body = await parseError(response);
+    if (response.status === 401 && path !== "/api/v1/session/login") {
+      window.dispatchEvent(
+        new CustomEvent(AUTH_INVALID_EVENT, {
+          detail: {
+            code: body?.code ?? "authentication_required",
+            message: body?.message ?? "Your session is no longer valid. Please sign in again.",
+          },
+        }),
+      );
+    }
     throw new ApiError(response.status, body, response.statusText || "Request failed");
   }
 

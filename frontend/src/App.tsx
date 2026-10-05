@@ -2,7 +2,7 @@
 import { Link, NavLink, Navigate, Route, Routes } from "react-router-dom";
 
 import { AdminControls } from "./AdminControls";
-import { ApiError, bootstrapCsrf, getSessionUser, logout } from "./api";
+import { AUTH_INVALID_EVENT, ApiError, bootstrapCsrf, getSessionUser, logout } from "./api";
 import { LoginScreen, PasswordChangeScreen } from "./Auth";
 import { BoardPage } from "./BoardPage";
 import { CalendarPage, NotificationsPage, ReportsPage } from "./OperationsPages";
@@ -85,6 +85,20 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    const authenticationInvalid = (event: Event) => {
+      const detail = (event as CustomEvent<{ message?: string }>).detail;
+      setUser((current) => {
+        if (current) {
+          setSessionError(detail?.message ?? "Your session ended. Please sign in again.");
+        }
+        return null;
+      });
+    };
+    window.addEventListener(AUTH_INVALID_EVENT, authenticationInvalid);
+    return () => window.removeEventListener(AUTH_INVALID_EVENT, authenticationInvalid);
+  }, []);
+
+  useEffect(() => {
     let active = true;
     void bootstrapCsrf()
       .then(async () => {
@@ -111,10 +125,16 @@ export function App() {
     };
   }, []);
 
+  function authenticated(nextUser: SessionUser) {
+    setSessionError("");
+    setUser(nextUser);
+  }
+
   async function signOut() {
     try {
       await logout();
     } finally {
+      setSessionError("");
       setUser(null);
     }
   }
@@ -140,7 +160,7 @@ export function App() {
     return (
       <>
         {sessionError && <div className="global-alert"><Alert>{sessionError}</Alert></div>}
-        <LoginScreen onAuthenticated={setUser} />
+        <LoginScreen onAuthenticated={authenticated} />
       </>
     );
   }

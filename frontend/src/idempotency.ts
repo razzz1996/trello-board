@@ -26,10 +26,19 @@ export function createIdempotencyKey(): string {
   }
 
   fallbackCounter = (fallbackCounter + 1) % Number.MAX_SAFE_INTEGER;
+  const highResolutionTime =
+    typeof globalThis.performance?.now === "function"
+      ? Math.floor(globalThis.performance.now() * 1000).toString(36)
+      : "0";
+  const randomPart = () =>
+    Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(36);
+
   return [
     "request",
     Date.now().toString(36),
+    highResolutionTime,
     fallbackCounter.toString(36),
-    Math.random().toString(36).slice(2, 14),
+    randomPart(),
+    randomPart(),
   ].join("-");
 }

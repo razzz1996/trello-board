@@ -162,15 +162,24 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = PROJECT_ROOT / "runtime" / "static"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+SESSION_COOKIE_NAME = "emega_productivity_sessionid"
+CSRF_COOKIE_NAME = "emega_productivity_csrftoken"
+SESSION_COOKIE_DOMAIN = None
+CSRF_COOKIE_DOMAIN = None
+SESSION_COOKIE_PATH = "/"
+CSRF_COOKIE_PATH = "/"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_SECURE = ENVIRONMENT == "pilot"
-# Keep authenticated users signed in with a sliding, effectively non-expiring session.
-# Explicit sign-out, password reset, account disable, and session-generation revocation
-# still invalidate access immediately.
-SESSION_COOKIE_AGE = 10 * 365 * 24 * 60 * 60
+# Persistent login with bounded risk:
+# - 30-day sliding idle window (renewed while actively used)
+# - 90-day absolute lifetime enforced by SessionGenerationMiddleware
+SESSION_COOKIE_AGE = 30 * 24 * 60 * 60
+PRODUCTIVITY_SESSION_ABSOLUTE_AGE = 90 * 24 * 60 * 60
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SECURE = ENVIRONMENT == "pilot"
 SECURE_SSL_REDIRECT = ENVIRONMENT == "pilot"
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") if ENVIRONMENT == "pilot" else None

@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 from accounts.models import User
 from core.clock import now
 from django.conf import settings
+from django.contrib.sessions.models import Session
 from schedules.models import Schedule
 from workitems.models import Task
 
@@ -22,6 +23,10 @@ def scheduler_tick() -> dict[str, int]:
     zone = ZoneInfo(settings.DEPLOYMENT["timezone"])
     local = observed_at.astimezone(zone)
     minute_key = local.strftime("%Y%m%d%H%M")
+
+    expired_session_count, _ = Session.objects.filter(
+        expire_date__lt=observed_at,
+    ).delete()
 
     recurrence_count = 0
     for schedule in Schedule.objects.filter(active=True, board__archived=False).only(
@@ -116,6 +121,7 @@ def scheduler_tick() -> dict[str, int]:
                 "task_recurrence_enqueued": task_recurrence_count,
                 "digest_enqueued": digest_count,
                 "manager_report_enqueued": manager_count,
+                "expired_sessions_pruned": expired_session_count,
             },
         },
     )
@@ -124,4 +130,5 @@ def scheduler_tick() -> dict[str, int]:
         "task_recurrence_enqueued": task_recurrence_count,
         "digest_enqueued": digest_count,
         "manager_report_enqueued": manager_count,
+        "expired_sessions_pruned": expired_session_count,
     }

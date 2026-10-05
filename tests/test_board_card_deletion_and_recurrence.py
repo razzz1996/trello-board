@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from boards.models import Board, BoardColumn, BoardMembership
 from django.contrib.auth import get_user_model
+from django.contrib.sessions.models import Session
 from django.utils import timezone
 from notifications.models import Job, Notification
 from notifications.scheduler import scheduler_tick
@@ -558,3 +559,23 @@ def test_recurring_card_can_be_committed_again_with_next_revision():
     assert revisions == [1, 2]
     assert recommitted.current_commitment is not None
     assert recommitted.current_commitment.revision == 2
+
+
+def test_scheduler_prunes_expired_database_sessions():
+    observed = timezone.now()
+    Session.objects.create(
+        session_key="expired-session-row",
+        session_data="",
+        expire_date=observed - timedelta(minutes=1),
+    )
+    Session.objects.create(
+        session_key="active-session-row",
+        session_data="",
+        expire_date=observed + timedelta(days=1),
+    )
+
+    result = scheduler_tick()
+
+    assert not Session.objects.filter(session_key="expired-session-row").exists()
+    assert Session.objects.filter(session_key="active-session-row").exists()
+    assert result["expired_sessions_pruned"] >= 1

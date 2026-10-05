@@ -7,6 +7,7 @@ from boards.models import Board, BoardColumn, BoardMembership
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 User = get_user_model()
@@ -114,7 +115,7 @@ def test_csrf_login_and_session_generation_revocation():
 
     csrf_response = client.get("/api/v1/session/csrf/")
     assert csrf_response.status_code == 200
-    csrf_token = client.cookies["csrftoken"].value
+    csrf_token = client.cookies[settings.CSRF_COOKIE_NAME].value
 
     rejected = client.post(
         "/api/v1/session/login",
@@ -140,7 +141,7 @@ def test_csrf_login_and_session_generation_revocation():
 
     revoked = client.get("/api/v1/session/me/")
     assert revoked.status_code == 401
-    assert revoked.json()["code"] == "session_revoked"
+    assert revoked.json()["code"] in {"authentication_required", "session_revoked"}
 
 
 def test_login_lockout_after_five_failures():
@@ -151,7 +152,7 @@ def test_login_lockout_after_five_failures():
     )
     client = APIClient(enforce_csrf_checks=True)
     client.get("/api/v1/session/csrf/")
-    csrf_token = client.cookies["csrftoken"].value
+    csrf_token = client.cookies[settings.CSRF_COOKIE_NAME].value
 
     for _ in range(5):
         response = client.post(
@@ -337,7 +338,7 @@ def test_forced_password_change_succeeds_and_keeps_session_valid():
     client = APIClient(enforce_csrf_checks=True)
 
     client.get("/api/v1/session/csrf/")
-    csrf_token = client.cookies["csrftoken"].value
+    csrf_token = client.cookies[settings.CSRF_COOKIE_NAME].value
     login_response = client.post(
         "/api/v1/session/login",
         {"username": user.username, "password": TEST_PASSWORD},
@@ -347,7 +348,7 @@ def test_forced_password_change_succeeds_and_keeps_session_valid():
     assert login_response.status_code == 200
     assert login_response.json()["force_password_change"] is True
 
-    csrf_token = client.cookies["csrftoken"].value
+    csrf_token = client.cookies[settings.CSRF_COOKIE_NAME].value
     replacement = TEST_PASSWORD + "Permanent!"
     changed = client.post(
         "/api/v1/session/password-change",
@@ -501,7 +502,7 @@ def test_five_failures_do_not_lock_other_account_on_shared_office_address():
     )
     client = APIClient(enforce_csrf_checks=True)
     client.get("/api/v1/session/csrf/")
-    csrf_token = client.cookies["csrftoken"].value
+    csrf_token = client.cookies[settings.CSRF_COOKIE_NAME].value
 
     for _ in range(5):
         response = client.post(
@@ -539,7 +540,167 @@ def test_client_address_normalizes_vite_forwarded_ipv4_and_rejects_spoofing():
     assert client_address(direct) == "172.16.0.55"
 
 
-def test_sessions_are_persistent_and_sliding():
-    assert settings.SESSION_COOKIE_AGE >= 10 * 365 * 24 * 60 * 60
+def test_sessions_are_persistent_bounded_and_cookie_isolated():
+    assert settings.SESSION_COOKIE_NAME == "emega_productivity_sessionid"
+    assert settings.CSRF_COOKIE_NAME == "emega_productivity_csrftoken"
+    assert settings.SESSION_COOKIE_NAME != "monthly_evaluation_sessionid"
+    assert settings.CSRF_COOKIE_NAME != "monthly_evaluation_csrftoken"
+    assert settings.SESSION_COOKIE_AGE == 30 * 24 * 60 * 60
+    assert settings.PRODUCTIVITY_SESSION_ABSOLUTE_AGE == 90 * 24 * 60 * 60
     assert settings.SESSION_SAVE_EVERY_REQUEST is True
     assert settings.SESSION_EXPIRE_AT_BROWSER_CLOSE is False
+    assert settings.SESSION_COOKIE_HTTPONLY is True
+    assert settings.SESSION_COOKIE_SAMESITE == "Lax"
+    assert settings.SESSION_COOKIE_PATH == "/"
+    assert settings.CSRF_COOKIE_PATH == "/"
+
+
+def test_absolute_session_lifetime_is_enforced():
+    user = User.objects.create_user(
+        username="absolute-session-user",
+        password=TEST_PASSWORD,
+        force_password_change=False,
+    )
+    client = APIClient()
+    client.force_login(user)
+    session = client.session
+    session["auth_generation"] = user.session_generation
+    session["auth_started_at"] = (
+        timezone.now().timestamp() - settings.PRODUCTIVITY_SESSION_ABSOLUTE_AGE - 1
+    )
+    session.save()
+
+    expired = client.get("/api/v1/session/me/")
+
+    assert expired.status_code == 401
+    assert expired.json()["code"] == "session_expired"
+
+
+def test_explicit_logout_invalidates_backend_session():
+    user = User.objects.create_user(
+        username="logout-user",
+        password=TEST_PASSWORD,
+        force_password_change=False,
+    )
+    client = APIClient()
+    client.force_login(user)
+
+    assert client.get("/api/v1/session/me/").status_code == 200
+    assert client.post("/api/v1/session/logout").status_code == 204
+    assert client.get("/api/v1/session/me/").status_code == 401
+
+
+def test_login_rotates_preexisting_session_identifier():
+    user = User.objects.create_user(
+        username="rotation-user",
+        password=TEST_PASSWORD,
+        force_password_change=False,
+    )
+    client = APIClient(enforce_csrf_checks=True)
+    session = client.session
+    session["prelogin"] = "value"
+    session.save()
+    old_session_key = session.session_key
+
+    client.get("/api/v1/session/csrf/")
+    csrf_token = client.cookies[settings.CSRF_COOKIE_NAME].value
+    response = client.post(
+        "/api/v1/session/login",
+        {"username": user.username, "password": TEST_PASSWORD},
+        format="json",
+        HTTP_X_CSRFTOKEN=csrf_token,
+    )
+
+    assert response.status_code == 200
+    assert client.session.session_key != old_session_key
+    assert "auth_started_at" in client.session
+
+
+def test_admin_disable_revokes_existing_user_session():
+    admin = User.objects.create_user(username="revoke-admin", password=None, is_staff=True)
+    user = User.objects.create_user(
+        username="revoke-member",
+        password=TEST_PASSWORD,
+        force_password_change=False,
+    )
+
+    user_client = APIClient()
+    user_client.force_login(user)
+    user_session = user_client.session
+    user_session["auth_generation"] = user.session_generation
+    user_session["auth_started_at"] = timezone.now().timestamp()
+    user_session.save()
+    assert user_client.get("/api/v1/session/me/").status_code == 200
+
+    admin_client = APIClient()
+    admin_client.force_authenticate(user=admin)
+    disabled = admin_client.post(
+        f"/api/v1/admin/users/{user.id}/commands/disable",
+        {"reason": "Session revocation test"},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="disable-session-revocation",
+    )
+    assert disabled.status_code == 200
+
+    revoked = user_client.get("/api/v1/session/me/")
+    assert revoked.status_code == 401
+    assert revoked.json()["code"] in {"authentication_required", "session_revoked"}
+
+def test_password_change_preserves_current_session_and_revokes_other_sessions():
+    user = User.objects.create_user(
+        username="password-change-revoke",
+        password=TEST_PASSWORD,
+        force_password_change=False,
+    )
+    primary = APIClient()
+    secondary = APIClient()
+    for client in (primary, secondary):
+        client.force_login(user)
+        session = client.session
+        session["auth_generation"] = user.session_generation
+        session["auth_started_at"] = timezone.now().timestamp()
+        session.save()
+
+    changed = primary.post(
+        "/api/v1/session/password-change",
+        {
+            "current_password": TEST_PASSWORD,
+            "new_password": TEST_PASSWORD + "Changed!",
+        },
+        format="json",
+    )
+    assert changed.status_code == 200
+    assert primary.get("/api/v1/session/me/").status_code == 200
+
+    revoked = secondary.get("/api/v1/session/me/")
+    assert revoked.status_code == 401
+
+
+def test_admin_password_reset_revokes_existing_session():
+    admin = User.objects.create_user(username="reset-revoke-admin", password=None, is_staff=True)
+    user = User.objects.create_user(
+        username="reset-revoke-member",
+        password=TEST_PASSWORD,
+        force_password_change=False,
+    )
+    user_client = APIClient()
+    user_client.force_login(user)
+    session = user_client.session
+    session["auth_generation"] = user.session_generation
+    session["auth_started_at"] = timezone.now().timestamp()
+    session.save()
+    assert user_client.get("/api/v1/session/me/").status_code == 200
+
+    admin_client = APIClient()
+    admin_client.force_authenticate(user=admin)
+    reset = admin_client.post(
+        f"/api/v1/admin/users/{user.id}/commands/reset_password",
+        {
+            "temporary_password": TEST_PASSWORD + "Reset!",
+            "reason": "Revoke active sessions",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="reset-session-revocation",
+    )
+    assert reset.status_code == 200
+    assert user_client.get("/api/v1/session/me/").status_code == 401

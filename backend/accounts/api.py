@@ -101,6 +101,7 @@ class SessionLoginView(APIView):
         clear_success(username, address)
         login(request, user)
         request.session["auth_generation"] = user.session_generation
+        request.session["auth_started_at"] = now().timestamp()
         rotate_token(request)
         return Response(_user_payload(user))
 
@@ -169,6 +170,7 @@ class PasswordChangeView(APIView):
             )
         update_session_auth_hash(request, user)
         request.session["auth_generation"] = user.session_generation
+        request.session["auth_started_at"] = now().timestamp()
         rotate_token(request)
         return Response(_user_payload(user))
 
