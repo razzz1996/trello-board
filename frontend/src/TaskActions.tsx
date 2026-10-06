@@ -406,12 +406,12 @@ export function TaskDetailModal({
       <div className="task-detail__meta">
         <span className="stars">{stars(task.priority)}</span>
         <span className={isOverdue(task) ? "status-pill status-pill--danger" : "status-pill"}>
-          {taskStateLabel(task.column_state)}
+          {task.column_name || taskStateLabel(task.column_state)}
         </span>
         {isOverdue(task) && <span className="status-pill status-pill--danger">Overdue</span>}
       </div>
       <dl className="detail-grid">
-        <dt>List</dt><dd>{taskStateLabel(task.column_state)}</dd>
+        <dt>List</dt><dd>{task.column_name || taskStateLabel(task.column_state)}</dd>
         <dt>Owner</dt><dd>{member?.username ?? "Unassigned"}</dd>
         <dt>Due date</dt><dd>{formatDateTime(taskDue(task))}</dd>
         <dt>Repeats</dt>

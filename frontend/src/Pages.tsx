@@ -28,7 +28,7 @@ function TaskTable({ tasks }: { tasks: Task[] }) {
             <tr key={task.id}>
               <td><Link to={`/boards/${task.board_id}`}>{task.title}</Link></td>
               <td className="stars">{stars(task.priority)}</td>
-              <td>{taskStateLabel(task.column_state)}</td>
+              <td>{task.column_name || taskStateLabel(task.column_state)}</td>
               <td className={isOverdue(task) ? "deadline deadline--late" : "deadline"}>
                 {formatDateTime(taskDue(task))}
               </td>

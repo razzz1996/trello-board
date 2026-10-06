@@ -32,9 +32,10 @@ class BoardColumn(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name="columns")
-    state = models.CharField(max_length=32, choices=State.choices)
+    state = models.CharField(max_length=64)
     name = models.CharField(max_length=100)
     position = models.PositiveSmallIntegerField()
+    is_custom = models.BooleanField(default=False)
 
     class Meta:
         constraints = [

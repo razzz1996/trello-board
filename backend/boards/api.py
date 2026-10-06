@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from core.idempotency import IdempotencyError, run_idempotent
 from django.contrib.auth import get_user_model
 from django.db import connection, transaction
+from django.db.models import Max
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from workitems.models import AuditEvent
@@ -38,6 +39,16 @@ def _board_summary(board: Board) -> dict:
     }
 
 
+def _column_payload(column: BoardColumn) -> dict[str, object]:
+    return {
+        "id": str(column.id),
+        "state": column.state,
+        "name": column.name,
+        "position": column.position,
+        "is_custom": column.is_custom,
+    }
+
+
 def _idempotency_error(exc: IdempotencyError) -> Response:
     return Response(
         {"code": exc.code, "message": exc.message, "field_errors": {}, "request_id": None},
@@ -62,6 +73,10 @@ def _board_admin_error(exc: BoardAdminError) -> Response:
 
 def _authorize_board_manager_or_admin(user, board_id) -> None:
     require_board_manager_or_site_admin(user, board_id)
+
+
+def _authorize_board_member(user, board_id) -> None:
+    require_board_member(user, board_id)
 
 
 def _membership_payload(item: BoardMembership) -> dict[str, object]:
@@ -280,6 +295,7 @@ class BoardSnapshotView(APIView):
                             "state": column.state,
                             "name": column.name,
                             "position": column.position,
+                            "is_custom": column.is_custom,
                             "tasks": grouped[str(column.id)],
                         }
                         for column in columns
@@ -288,6 +304,175 @@ class BoardSnapshotView(APIView):
             )
             response.headers["ETag"] = etag
             return response
+
+
+MAX_BOARD_COLUMNS = 20
+
+
+class BoardColumnCollectionView(APIView):
+    def post(self, request, board_id):
+        require_board_member(request.user, board_id)
+        payload = request.data if isinstance(request.data, dict) else {}
+        name = str(payload.get("name", "")).strip()
+        if not name or len(name) > 100:
+            return _board_admin_error(
+                BoardAdminError("invalid_name", "List name is required and must be 100 characters or less.")
+            )
+
+        def create():
+            with transaction.atomic():
+                board = Board.objects.select_for_update().filter(pk=board_id, archived=False).first()
+                if board is None:
+                    raise BoardAdminError("not_found", "Board not found.", 404)
+                require_board_member(request.user, board.id, for_update=True)
+                if board.columns.exclude(state=BoardColumn.State.REVIEW).count() >= MAX_BOARD_COLUMNS:
+                    raise BoardAdminError(
+                        "list_limit",
+                        f"A board can contain up to {MAX_BOARD_COLUMNS} active lists.",
+                        409,
+                    )
+                current_max = board.columns.aggregate(value=Max("position"))["value"]
+                position = 0 if current_max is None else int(current_max) + 1
+                column = BoardColumn.objects.create(
+                    board=board,
+                    state=f"CUSTOM_{uuid4().hex[:20].upper()}",
+                    name=name,
+                    position=position,
+                    is_custom=True,
+                )
+                board.revision += 1
+                board.save(update_fields=["revision", "updated_at"])
+                AuditEvent.objects.create(
+                    board=board,
+                    board_revision=board.revision,
+                    task=None,
+                    actor=request.user,
+                    action="create_list",
+                    reason=str(payload.get("reason", ""))[:2000],
+                    before={},
+                    after=_column_payload(column),
+                )
+                return 201, {**_column_payload(column), "board_revision": board.revision}
+
+        try:
+            result = run_idempotent(
+                actor=request.user,
+                endpoint=f"/api/v1/boards/{board_id}/columns",
+                key=request.headers.get("Idempotency-Key"),
+                payload=dict(payload),
+                handler=create,
+                authorize_replay=lambda: _authorize_board_member(request.user, board_id),
+            )
+            return Response(result.body, status=result.status)
+        except BoardAdminError as exc:
+            return _board_admin_error(exc)
+        except IdempotencyError as exc:
+            return _idempotency_error(exc)
+
+
+class BoardColumnCommandView(APIView):
+    def post(self, request, board_id, column_id, command):
+        require_board_member(request.user, board_id)
+        payload = request.data if isinstance(request.data, dict) else {}
+        try:
+            expected_revision = int(payload["expected_board_revision"])
+        except (KeyError, TypeError, ValueError):
+            return _board_admin_error(
+                BoardAdminError(
+                    "expected_revision_required",
+                    "expected_board_revision is required.",
+                    400,
+                )
+            )
+
+        if command not in {"rename", "delete"}:
+            return _board_admin_error(
+                BoardAdminError("unknown_command", "Unknown list command.", 404)
+            )
+
+        def execute():
+            with transaction.atomic():
+                board = Board.objects.select_for_update().filter(pk=board_id, archived=False).first()
+                if board is None:
+                    raise BoardAdminError("not_found", "Board not found.", 404)
+                require_board_member(request.user, board.id, for_update=True)
+                if board.revision != expected_revision:
+                    raise BoardAdminError(
+                        "stale_state",
+                        "The board changed since it was loaded.",
+                        409,
+                    )
+                column = (
+                    BoardColumn.objects.select_for_update()
+                    .filter(pk=column_id, board=board)
+                    .first()
+                )
+                if column is None or column.state == BoardColumn.State.REVIEW:
+                    raise BoardAdminError("not_found", "List not found.", 404)
+
+                before = _column_payload(column)
+                if command == "rename":
+                    name = str(payload.get("name", "")).strip()
+                    if not name or len(name) > 100:
+                        raise BoardAdminError(
+                            "invalid_name",
+                            "List name is required and must be 100 characters or less.",
+                            400,
+                        )
+                    column.name = name
+                    column.save(update_fields=["name"])
+                    response_body: dict[str, object] = _column_payload(column)
+                    action = "rename_list"
+                else:
+                    if not column.is_custom:
+                        raise BoardAdminError(
+                            "protected_list",
+                            "Inbox, To Do, In Progress, Later, and Done cannot be deleted.",
+                            409,
+                        )
+                    if column.tasks.exists():
+                        raise BoardAdminError(
+                            "list_not_empty",
+                            "Move or delete every card in this list before deleting it.",
+                            409,
+                        )
+                    response_body = {
+                        "deleted": True,
+                        "column_id": str(column.id),
+                        "name": column.name,
+                    }
+                    action = "delete_list"
+                    column.delete()
+
+                board.revision += 1
+                board.save(update_fields=["revision", "updated_at"])
+                AuditEvent.objects.create(
+                    board=board,
+                    board_revision=board.revision,
+                    task=None,
+                    actor=request.user,
+                    action=action,
+                    reason=str(payload.get("reason", ""))[:2000],
+                    before=before,
+                    after=response_body,
+                )
+                response_body["board_revision"] = board.revision
+                return 200, response_body
+
+        try:
+            result = run_idempotent(
+                actor=request.user,
+                endpoint=f"/api/v1/boards/{board_id}/columns/{column_id}/commands/{command}",
+                key=request.headers.get("Idempotency-Key"),
+                payload=dict(payload),
+                handler=execute,
+                authorize_replay=lambda: _authorize_board_member(request.user, board_id),
+            )
+            return Response(result.body, status=result.status)
+        except BoardAdminError as exc:
+            return _board_admin_error(exc)
+        except IdempotencyError as exc:
+            return _idempotency_error(exc)
 
 
 class BoardDeleteView(APIView):

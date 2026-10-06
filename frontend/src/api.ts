@@ -6,6 +6,7 @@ export const AUTH_INVALID_EVENT = "emega:auth-invalid";
 import type {
   AdminUser,
   ApiErrorBody,
+  BoardColumn,
   BoardMembershipAdmin,
   BoardSnapshot,
   BoardSummary,
@@ -185,6 +186,36 @@ export async function deleteBoard(
   );
 }
 
+export async function createBoardColumn(
+  boardId: string,
+  name: string,
+): Promise<BoardColumn & { board_revision: number }> {
+  return request(
+    `/api/v1/boards/${encodeURIComponent(boardId)}/columns`,
+    {
+      method: "POST",
+      body: JSON.stringify({ name, reason: "Added from board" }),
+    },
+    { idempotentMutation: true },
+  );
+}
+
+export async function commandBoardColumn(
+  boardId: string,
+  columnId: string,
+  command: "rename" | "delete",
+  payload: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  return request(
+    `/api/v1/boards/${encodeURIComponent(boardId)}/columns/${encodeURIComponent(columnId)}/commands/${command}`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    { idempotentMutation: true },
+  );
+}
+
 export async function getBoardSnapshot(
   boardId: string,
   knownRevision?: number,
@@ -225,6 +256,7 @@ export async function createTask(input: {
   owner_id?: string | null;
   draft_due_at?: string | null;
   draft_acceptance_criteria?: string;
+  column_id?: string | null;
 }): Promise<Task> {
   return request<Task>(
     "/api/v1/tasks",

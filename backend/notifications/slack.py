@@ -34,6 +34,10 @@ class SlackDeliveryError(RuntimeError):
 SAFE_BACKOFF_SECONDS = [60, 120, 240, 480, 960]
 
 
+def _active_work_state(state: str) -> bool:
+    return state not in {BoardColumn.State.DONE, BoardColumn.State.REVIEW}
+
+
 def _token() -> str:
     path_value = os.environ.get("PRODUCTIVITY_SLACK_TOKEN_FILE")
     if not path_value:
@@ -107,34 +111,18 @@ def _eligible(notification: Notification) -> bool:
     if notification.kind == "overdue_manager_escalation":
         return (
             membership.role == BoardMembership.Role.MANAGER
-            and task.column.state
-            in {
-                BoardColumn.State.BACKLOG,
-                BoardColumn.State.TODO,
-                BoardColumn.State.IN_PROGRESS,
-                BoardColumn.State.BLOCKED,
-            }
+            and _active_work_state(task.column.state)
             and task.current_commitment is not None
             and task.current_commitment.due_at <= now()
         )
     if task.current_owner_id != recipient.id:
         return False
     if notification.kind == "due_reminder":
-        return task.column.state in {
-            BoardColumn.State.BACKLOG,
-            BoardColumn.State.TODO,
-            BoardColumn.State.IN_PROGRESS,
-            BoardColumn.State.BLOCKED,
-        }
+        return _active_work_state(task.column.state)
     if notification.kind == "overdue_escalation":
-        return task.column.state in {
-            BoardColumn.State.BACKLOG,
-            BoardColumn.State.TODO,
-            BoardColumn.State.IN_PROGRESS,
-            BoardColumn.State.BLOCKED,
-        }
+        return _active_work_state(task.column.state)
     if notification.kind == "assignment_notification":
-        return task.column.state != BoardColumn.State.DONE
+        return _active_work_state(task.column.state)
     return True
 
 

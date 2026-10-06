@@ -13,12 +13,9 @@ from workitems.models import Task
 from .jobs import enqueue_job
 from .models import Job, Notification
 
-ACTIVE_STATES = {
-    BoardColumn.State.BACKLOG,
-    BoardColumn.State.TODO,
-    BoardColumn.State.IN_PROGRESS,
-    BoardColumn.State.BLOCKED,
-}
+
+def _active_work_state(state: str) -> bool:
+    return state not in {BoardColumn.State.DONE, BoardColumn.State.REVIEW}
 
 
 def _eligible_recipient(user: User, task: Task) -> bool:
@@ -108,7 +105,7 @@ def create_task_notification(job: Job) -> Notification | None:
             if submission is None or hasattr(submission, "review"):
                 return None
         else:
-            if task.is_cancelled or task.column.state not in ACTIVE_STATES:
+            if task.is_cancelled or not _active_work_state(task.column.state):
                 return None
             if task.current_commitment is None or task.current_commitment.due_at > now():
                 return None
@@ -119,12 +116,12 @@ def create_task_notification(job: Job) -> Notification | None:
             if task.committed_at is None or task.column.state == BoardColumn.State.DONE:
                 return None
         elif job.job_type == "due_reminder":
-            if task.column.state not in ACTIVE_STATES:
+            if not _active_work_state(task.column.state):
                 return None
             if task.current_commitment is None or task.current_commitment.due_at <= now():
                 return None
         elif job.job_type == "overdue_escalation":
-            if task.column.state not in ACTIVE_STATES:
+            if not _active_work_state(task.column.state):
                 return None
             if task.current_commitment is None or task.current_commitment.due_at > now():
                 return None

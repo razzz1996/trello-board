@@ -6,6 +6,8 @@ from accounts.api import (
     SessionLogoutView,
 )
 from boards.api import (
+    BoardColumnCollectionView,
+    BoardColumnCommandView,
     BoardDeleteView,
     BoardListCreateView,
     BoardMembershipCollectionView,
@@ -40,6 +42,16 @@ urlpatterns = [
         "boards/<uuid:board_id>/snapshot",
         BoardSnapshotView.as_view(),
         name="board-snapshot",
+    ),
+    path(
+        "boards/<uuid:board_id>/columns",
+        BoardColumnCollectionView.as_view(),
+        name="board-columns",
+    ),
+    path(
+        "boards/<uuid:board_id>/columns/<uuid:column_id>/commands/<str:command>",
+        BoardColumnCommandView.as_view(),
+        name="board-column-command",
     ),
     path(
         "boards/<uuid:board_id>/delete",

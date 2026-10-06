@@ -704,3 +704,120 @@ def test_admin_password_reset_revokes_existing_session():
     )
     assert reset.status_code == 200
     assert user_client.get("/api/v1/session/me/").status_code == 401
+
+
+def test_member_can_create_use_rename_and_delete_custom_list():
+    admin = User.objects.create_user(username="custom-list-admin", password=None, is_staff=True)
+    member = User.objects.create_user(username="custom-list-member", password=None)
+    board = create_board(admin, member)
+
+    client = APIClient()
+    client.force_authenticate(user=member)
+
+    created = client.post(
+        f"/api/v1/boards/{board.id}/columns",
+        {"name": "Ideas"},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="custom-list-create",
+    )
+    assert created.status_code == 201
+    custom = created.json()
+    assert custom["name"] == "Ideas"
+    assert custom["is_custom"] is True
+    assert custom["state"].startswith("CUSTOM_")
+
+    card = client.post(
+        "/api/v1/tasks",
+        {
+            "board_id": str(board.id),
+            "column_id": custom["id"],
+            "title": "Custom list card",
+            "priority": 1,
+            "owner_id": str(member.id),
+            "draft_due_at": None,
+            "draft_acceptance_criteria": "",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="custom-list-card",
+    )
+    assert card.status_code == 201
+    card_body = card.json()
+    assert card_body["column_id"] == custom["id"]
+    assert card_body["column_name"] == "Ideas"
+    assert card_body["column_state"] == custom["state"]
+
+    snapshot = client.get(f"/api/v1/boards/{board.id}/snapshot").json()
+    renamed = client.post(
+        f"/api/v1/boards/{board.id}/columns/{custom['id']}/commands/rename",
+        {
+            "expected_board_revision": snapshot["revision"],
+            "name": "Waiting on others",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="custom-list-rename",
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["name"] == "Waiting on others"
+
+    snapshot = client.get(f"/api/v1/boards/{board.id}/snapshot").json()
+    not_empty = client.post(
+        f"/api/v1/boards/{board.id}/columns/{custom['id']}/commands/delete",
+        {"expected_board_revision": snapshot["revision"]},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="custom-list-delete-not-empty",
+    )
+    assert not_empty.status_code == 409
+    assert not_empty.json()["code"] == "list_not_empty"
+
+    task = next(
+        item
+        for column in snapshot["columns"]
+        for item in column["tasks"]
+        if item["id"] == card_body["id"]
+    )
+    todo = next(column for column in snapshot["columns"] if column["state"] == "TODO")
+    moved = client.post(
+        f"/api/v1/tasks/{task['id']}/commands/move_task",
+        {
+            "expected_version": task["row_version"],
+            "expected_board_revision": snapshot["revision"],
+            "target_column_id": todo["id"],
+            "target_position": None,
+            "reason": "Move out before deleting list",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="custom-list-move-card",
+    )
+    assert moved.status_code == 200
+    assert moved.json()["column_id"] == todo["id"]
+
+    snapshot = client.get(f"/api/v1/boards/{board.id}/snapshot").json()
+    deleted = client.post(
+        f"/api/v1/boards/{board.id}/columns/{custom['id']}/commands/delete",
+        {"expected_board_revision": snapshot["revision"]},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="custom-list-delete-empty",
+    )
+    assert deleted.status_code == 200
+    assert deleted.json()["deleted"] is True
+    assert not BoardColumn.objects.filter(pk=custom["id"]).exists()
+
+
+def test_standard_lists_cannot_be_deleted():
+    admin = User.objects.create_user(username="protected-list-admin", password=None, is_staff=True)
+    member = User.objects.create_user(username="protected-list-member", password=None)
+    board = create_board(admin, member)
+    todo = BoardColumn.objects.get(board=board, state=BoardColumn.State.TODO)
+
+    client = APIClient()
+    client.force_authenticate(user=member)
+    response = client.post(
+        f"/api/v1/boards/{board.id}/columns/{todo.id}/commands/delete",
+        {"expected_board_revision": board.revision},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="protected-list-delete",
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "protected_list"
+    assert BoardColumn.objects.filter(pk=todo.id).exists()

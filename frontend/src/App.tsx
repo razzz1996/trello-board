@@ -1,5 +1,13 @@
 ﻿import { useEffect, useState } from "react";
-import { Link, NavLink, Navigate, Route, Routes } from "react-router-dom";
+import {
+  Link,
+  NavLink,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 
 import { AdminControls } from "./AdminControls";
 import { AUTH_INVALID_EVENT, ApiError, bootstrapCsrf, getSessionUser, logout } from "./api";
@@ -19,22 +27,56 @@ function Shell({
   online: boolean;
   onLogout: () => Promise<void>;
 }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const boardMode = location.pathname.startsWith("/boards/");
+  const boardQuery = new URLSearchParams(location.search).get("q") ?? "";
+
+  function updateBoardSearch(value: string) {
+    const params = new URLSearchParams(location.search);
+    if (value.trim()) params.set("q", value);
+    else params.delete("q");
+    navigate(
+      { pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : "" },
+      { replace: true },
+    );
+  }
+
   return (
     <div className="app-shell">
-      <header className="topbar">
+      <header className={`topbar ${boardMode ? "topbar--board" : ""}`}>
         <Link className="topbar__brand" to="/">
           <span className="brand-mark brand-mark--small">eM</span>
           <span>Productivity</span>
         </Link>
-        <nav className="topbar__nav" aria-label="Primary">
-          <NavLink to="/">Boards</NavLink>
-          <NavLink to="/my-tasks">My Tasks</NavLink>
-          <NavLink to="/manager">Manager</NavLink>
-          <NavLink to="/notifications">Notifications</NavLink>
-          <NavLink to="/calendar">Calendar</NavLink>
-          <NavLink to="/reports">Reports</NavLink>
-          {user.is_admin && <NavLink to="/admin">Admin</NavLink>}
-        </nav>
+        {boardMode ? (
+          <div className="topbar__board-tools">
+            <label className="topbar__search">
+              <span aria-hidden="true">⌕</span>
+              <input
+                value={boardQuery}
+                onChange={(event) => updateBoardSearch(event.target.value)}
+                placeholder="Search cards"
+                aria-label="Search cards"
+              />
+            </label>
+            {user.is_admin && (
+              <Link className="button topbar__create" to="/">
+                ✦ Create
+              </Link>
+            )}
+          </div>
+        ) : (
+          <nav className="topbar__nav" aria-label="Primary">
+            <NavLink to="/">Boards</NavLink>
+            <NavLink to="/my-tasks">My Tasks</NavLink>
+            <NavLink to="/manager">Manager</NavLink>
+            <NavLink to="/notifications">Notifications</NavLink>
+            <NavLink to="/calendar">Calendar</NavLink>
+            <NavLink to="/reports">Reports</NavLink>
+            {user.is_admin && <NavLink to="/admin">Admin</NavLink>}
+          </nav>
+        )}
         <div className="topbar__user">
           <span>{user.username}</span>
           <button className="button button--ghost" type="button" onClick={() => void onLogout()}>

@@ -40,7 +40,7 @@ The stop launchers stop the relevant web, scheduler, worker, proxy, and Vite pro
 
 Latest full verifier evidence:
 
-- `evidence/verify_all_20261005T035633Z.json`
+- `evidence/verify_all_20261006T033808Z.json`
 - `evidence/lan_access_20261002T051351Z.json`
 - `evidence/lan_login_throttle_20260930T021959Z.json`
 - `evidence/local_restart_cycle_20260929T054104Z.json`
@@ -57,9 +57,9 @@ The latest full verifier passed:
 - npm audit: 0 vulnerabilities
 - calendar fixtures
 - PostgreSQL connectivity
-- full automated backend/database test suite: 97 passing tests
+- full automated backend/database test suite: 99 passing tests
 - frontend UUID compatibility tests: 3 passing tests
-- Playwright Chrome E2E suite: 6 passing browser scenarios
+- Playwright Chrome E2E suite: 8 passing browser scenarios, including a Trello-style visual contract check
 - browser UI card workflow with 12 sequential moves, backward moves, same-column reorder, edit, delete, create-after-moves, reload and persistence
 - multi-tab and two-user concurrency with safe stale-revision (409) recovery
 - persistent login across real Chrome profile restart and explicit logout persistence
@@ -89,9 +89,11 @@ The runtime readiness endpoint currently reports healthy database, scheduler, an
 - every active user can add, edit, assign, comment on, and drag cards on every board
 - active administrators are board managers; other active users receive member access automatically
 - new users are automatically synchronized to all existing boards
-- five-list Trello-style workflow: Inbox, To Do, In Progress, Later, Done
-- quick Inbox capture with title-first card creation
-- free drag/reorder between the five everyday lists
+- Trello-style board shell with dark header, fixed Inbox rail, purple horizontal canvas, colored lists, card search, and bottom board dock
+- five protected workflow lists: Inbox, To Do, In Progress, Later, Done
+- quick Inbox capture plus direct `Add a card` controls inside every list
+- all board users can create additional custom lists with `+ Add another list`, rename them, and delete them when empty
+- free drag/reorder between standard and custom lists; recurring cards still return specifically to Inbox and Done remains the completion state
 - administrator-only permanent board deletion with exact-name confirmation
 - permanent card deletion available to every board user, with optimistic concurrency protection
 - card-level daily, weekly, and monthly repetition with a user-selected next action date

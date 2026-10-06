@@ -116,6 +116,7 @@ class TaskCollectionView(APIView):
                     owner_id=payload.get("owner_id"),
                     draft_due_at=draft_due_at,
                     draft_acceptance_criteria=str(payload.get("draft_acceptance_criteria", "")),
+                    column_id=payload.get("column_id"),
                 )
                 return 201, _serialized(task)
 
@@ -288,6 +289,7 @@ class TaskCommandView(APIView):
             return services.move_task(
                 **common,
                 target_state=str(payload.get("target_state", "")),
+                target_column_id=payload.get("target_column_id"),
                 target_position=payload.get("target_position"),
                 reason=str(payload.get("reason", "")),
             )

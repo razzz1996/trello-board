@@ -103,6 +103,16 @@ def _column(board: Board, state: str) -> BoardColumn:
         ) from exc
 
 
+def _column_by_id(board: Board, column_id) -> BoardColumn:
+    try:
+        column = BoardColumn.objects.filter(board=board, pk=column_id).first()
+    except (TypeError, ValueError):
+        column = None
+    if column is None or column.state == BoardColumn.State.REVIEW:
+        raise DomainError("invalid_column", "Target list does not exist on this board.", status=409)
+    return column
+
+
 def _next_position(column: BoardColumn) -> int:
     current = (
         Task.objects.filter(column=column, is_cancelled=False)
@@ -225,6 +235,7 @@ def create_task(
     owner_id=None,
     draft_due_at: datetime | None = None,
     draft_acceptance_criteria: str = "",
+    column_id=None,
 ) -> Task:
     title = title.strip()
     if not title:
@@ -242,15 +253,19 @@ def create_task(
         board = Board.objects.select_for_update().get(pk=board_id, archived=False)
         require_board_member(actor, board.id, for_update=True)
         owner = _eligible_owner(board, owner_id) if owner_id else None
-        backlog = _column(board, BoardColumn.State.BACKLOG)
+        target_column = (
+            _column_by_id(board, column_id)
+            if column_id
+            else _column(board, BoardColumn.State.BACKLOG)
+        )
         task = Task.objects.create(
             board=board,
-            column=backlog,
+            column=target_column,
             title=title,
             description=description,
             priority=priority,
             current_owner=owner,
-            position=_next_position(backlog),
+            position=_next_position(target_column),
             draft_due_at=draft_due_at,
             draft_acceptance_criteria=draft_acceptance_criteria,
             created_by=actor,
@@ -411,33 +426,31 @@ def move_task(
     *,
     actor,
     task_id,
-    target_state: str,
+    target_state: str = "",
+    target_column_id=None,
     target_position: int | None,
     expected_version: int,
     expected_board_revision: int,
     reason: str = "",
 ) -> Task:
-    movable_states = {
-        BoardColumn.State.BACKLOG,
-        BoardColumn.State.TODO,
-        BoardColumn.State.IN_PROGRESS,
-        BoardColumn.State.BLOCKED,
-        BoardColumn.State.DONE,
-    }
     with transaction.atomic():
         board, task = _board_and_task_for_update(task_id)
         require_board_member(actor, board.id, for_update=True)
         _require_expected(task, board, expected_version, expected_board_revision)
         if task.is_cancelled:
             raise DomainError("cancelled_task", "Cancelled tasks cannot be dragged.", status=409)
-        if target_state not in movable_states:
-            raise DomainError(
-                "invalid_transition",
-                "Cards can be moved between Inbox, To Do, In Progress, Later, and Done.",
-                status=409,
-            )
 
-        target = _column(board, target_state)
+        if target_column_id:
+            target = _column_by_id(board, target_column_id)
+        else:
+            if not target_state or target_state == BoardColumn.State.REVIEW:
+                raise DomainError(
+                    "invalid_transition",
+                    "Cards can only be moved to an active list on this board.",
+                    status=409,
+                )
+            target = _column(board, target_state)
+
         before = _serialize_task(task)
         _resequence_for_move(task, target, target_position)
         task.row_version += 1

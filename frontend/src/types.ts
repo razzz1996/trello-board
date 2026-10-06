@@ -1,5 +1,12 @@
 ﻿export type Role = "MEMBER" | "MANAGER";
-export type TaskState = "BACKLOG" | "TODO" | "IN_PROGRESS" | "BLOCKED" | "REVIEW" | "DONE";
+export type TaskState =
+  | "BACKLOG"
+  | "TODO"
+  | "IN_PROGRESS"
+  | "BLOCKED"
+  | "REVIEW"
+  | "DONE"
+  | `CUSTOM_${string}`;
 export type RecurrenceFrequency = "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
 
 export interface SessionUser {
@@ -116,6 +123,7 @@ export interface Task {
   board_id: string;
   column_id: string;
   column_state: TaskState;
+  column_name: string;
   title: string;
   description: string;
   priority: 1 | 2 | 3;
@@ -147,6 +155,7 @@ export interface BoardColumn {
   state: TaskState;
   name: string;
   position: number;
+  is_custom: boolean;
   tasks: Task[];
 }
 

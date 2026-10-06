@@ -132,6 +132,7 @@ class ChangeProposalSerializer(serializers.ModelSerializer):
 
 class TaskSerializer(serializers.ModelSerializer):
     column_state = serializers.CharField(source="column.state", read_only=True)
+    column_name = serializers.CharField(source="column.name", read_only=True)
     current_owner_id = serializers.UUIDField(read_only=True, allow_null=True)
     original_owner_id = serializers.UUIDField(read_only=True, allow_null=True)
     current_commitment = CommitmentSerializer(read_only=True)
@@ -147,6 +148,7 @@ class TaskSerializer(serializers.ModelSerializer):
             "board_id",
             "column_id",
             "column_state",
+            "column_name",
             "title",
             "description",
             "priority",

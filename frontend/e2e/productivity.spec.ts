@@ -36,7 +36,16 @@ async function openBoard(page: Page) {
 }
 
 function column(page: Page, state: string) {
+  if (state === "BACKLOG") {
+    return page.locator('.trello-inbox[data-state="BACKLOG"]');
+  }
   return page.locator(`.kanban-column[data-state="${state}"]`);
+}
+
+function columnDropArea(page: Page, state: string) {
+  return state === "BACKLOG"
+    ? column(page, state).locator(".trello-inbox__cards")
+    : column(page, state).locator(".kanban-column__body");
 }
 
 function card(page: Page, title: string) {
@@ -44,9 +53,9 @@ function card(page: Page, title: string) {
 }
 
 async function addCard(page: Page, title: string) {
-  const input = page.getByPlaceholder("Capture a task into Inbox…");
+  const input = page.getByLabel("Add a card to Inbox");
   await input.fill(title);
-  await page.getByRole("button", { name: "+ Add to Inbox" }).click();
+  await page.getByRole("button", { name: "Add card", exact: true }).first().click();
   await expect(column(page, "BACKLOG").locator(".task-card").filter({ hasText: title })).toBeVisible();
 }
 async function dragCard(
@@ -59,7 +68,7 @@ async function dragCard(
   const source = card(page, title);
   const target = targetTitle
     ? card(page, targetTitle)
-    : column(page, targetState).locator(".kanban-column__body");
+    : columnDropArea(page, targetState);
 
   await source.scrollIntoViewIfNeeded();
   await target.scrollIntoViewIfNeeded();
@@ -276,6 +285,7 @@ test("Productivity and Monthly Evaluation remain authenticated together", async 
   expect(names).not.toContain("sessionid");
 
   const host = new URL(baseURL()).hostname;
+  const monthlyHost = new URL(monthlyURL()).hostname;
   const productivitySession = cookies.find(
     (cookie) => cookie.name === "emega_productivity_sessionid",
   );
@@ -303,14 +313,14 @@ test("Productivity and Monthly Evaluation remain authenticated together", async 
     sameSite: "Lax",
   });
   expect(monthlySession).toMatchObject({
-    domain: host,
+    domain: monthlyHost,
     path: "/",
     httpOnly: true,
     secure: false,
     sameSite: "Lax",
   });
   expect(monthlyCsrf).toMatchObject({
-    domain: host,
+    domain: monthlyHost,
     path: "/",
     httpOnly: false,
     secure: false,
@@ -380,4 +390,49 @@ test("server-side session-generation revocation invalidates an open browser", as
 
   await page.reload();
   await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+});
+
+
+test("custom list UI: add list, add card, drag out, rename, delete", async ({ page }) => {
+  await login(page, env("E2E_MEMBER_USERNAME"));
+  await openBoard(page);
+  const assertClean = monitor(page);
+
+  const listName = `Waiting ${Date.now()}`;
+  const renamedList = `${listName} renamed`;
+  const cardTitle = `Custom list card ${Date.now()}`;
+
+  await page.getByRole("button", { name: /Add another list/ }).click();
+  await page.getByLabel("New list title").fill(listName);
+  await page.getByRole("button", { name: "Add list" }).click();
+
+  let customList = page
+    .locator(".trello-list")
+    .filter({ has: page.getByRole("heading", { name: listName, exact: true }) });
+  await expect(customList).toBeVisible();
+
+  await customList.getByRole("button", { name: "Add a card" }).click();
+  await page.getByLabel(`Add a card to ${listName}`).fill(cardTitle);
+  await customList.getByRole("button", { name: "Add card", exact: true }).click();
+  await expect(customList.locator(".task-card").filter({ hasText: cardTitle })).toBeVisible();
+
+  await dragCard(page, cardTitle, "TODO");
+  await expect(column(page, "TODO").locator(".task-card").filter({ hasText: cardTitle })).toBeVisible();
+
+  await customList.getByRole("button", { name: `List actions for ${listName}` }).click();
+  await page.getByRole("button", { name: "Rename list" }).click();
+  await page.getByLabel("List name").fill(renamedList);
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+
+  customList = page
+    .locator(".trello-list")
+    .filter({ has: page.getByRole("heading", { name: renamedList, exact: true }) });
+  await expect(customList).toBeVisible();
+
+  await customList.getByRole("button", { name: `List actions for ${renamedList}` }).click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Delete list" }).click();
+  await expect(page.getByRole("heading", { name: renamedList, exact: true })).toHaveCount(0);
+
+  assertClean();
 });
