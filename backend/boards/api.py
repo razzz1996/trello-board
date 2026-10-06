@@ -5,10 +5,11 @@ from uuid import UUID, uuid4
 from core.idempotency import IdempotencyError, run_idempotent
 from django.contrib.auth import get_user_model
 from django.db import connection, transaction
-from django.db.models import Max
+from django.db.models import F, Max
+from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from workitems.models import AuditEvent
+from workitems.models import AuditEvent, Task
 from workitems.serializers import TaskSerializer
 
 from .deletion import BoardDeletionError, delete_board
@@ -28,6 +29,18 @@ STANDARD_COLUMNS = [
     (BoardColumn.State.BLOCKED, "Later"),
     (BoardColumn.State.DONE, "Done"),
 ]
+LIST_COLORS = {
+    "green",
+    "yellow",
+    "orange",
+    "red",
+    "purple",
+    "blue",
+    "teal",
+    "lime",
+    "pink",
+    "gray",
+}
 
 
 def _board_summary(board: Board) -> dict:
@@ -46,6 +59,9 @@ def _column_payload(column: BoardColumn) -> dict[str, object]:
         "name": column.name,
         "position": column.position,
         "is_custom": column.is_custom,
+        "color": column.color,
+        "is_archived": column.is_archived,
+        "archived_at": column.archived_at.isoformat() if column.archived_at else None,
     }
 
 
@@ -253,10 +269,16 @@ class BoardSnapshotView(APIView):
                 response.headers["ETag"] = etag
                 return response
             columns = list(
-                board.columns.exclude(state=BoardColumn.State.REVIEW).order_by("position")
+                board.columns.filter(is_archived=False)
+                .exclude(state=BoardColumn.State.REVIEW)
+                .order_by("position")
             )
             tasks = (
-                board.tasks.filter(is_cancelled=False)
+                board.tasks.filter(
+                    is_cancelled=False,
+                    is_archived=False,
+                    column__is_archived=False,
+                )
                 .exclude(column__state=BoardColumn.State.REVIEW)
                 .select_related("column", "current_owner", "original_owner", "current_commitment")
                 .prefetch_related(
@@ -296,6 +318,11 @@ class BoardSnapshotView(APIView):
                             "name": column.name,
                             "position": column.position,
                             "is_custom": column.is_custom,
+                            "color": column.color,
+                            "is_archived": column.is_archived,
+                            "archived_at": (
+                                column.archived_at.isoformat() if column.archived_at else None
+                            ),
                             "tasks": grouped[str(column.id)],
                         }
                         for column in columns
@@ -325,7 +352,12 @@ class BoardColumnCollectionView(APIView):
                 if board is None:
                     raise BoardAdminError("not_found", "Board not found.", 404)
                 require_board_member(request.user, board.id, for_update=True)
-                if board.columns.exclude(state=BoardColumn.State.REVIEW).count() >= MAX_BOARD_COLUMNS:
+                if (
+                    board.columns.filter(is_archived=False)
+                    .exclude(state=BoardColumn.State.REVIEW)
+                    .count()
+                    >= MAX_BOARD_COLUMNS
+                ):
                     raise BoardAdminError(
                         "list_limit",
                         f"A board can contain up to {MAX_BOARD_COLUMNS} active lists.",
@@ -371,6 +403,15 @@ class BoardColumnCollectionView(APIView):
 
 
 class BoardColumnCommandView(APIView):
+    COMMANDS = {
+        "rename",
+        "delete",
+        "set_color",
+        "clear_color",
+        "archive",
+        "archive_all_cards",
+    }
+
     def post(self, request, board_id, column_id, command):
         require_board_member(request.user, board_id)
         payload = request.data if isinstance(request.data, dict) else {}
@@ -385,7 +426,7 @@ class BoardColumnCommandView(APIView):
                 )
             )
 
-        if command not in {"rename", "delete"}:
+        if command not in self.COMMANDS:
             return _board_admin_error(
                 BoardAdminError("unknown_command", "Unknown list command.", 404)
             )
@@ -407,10 +448,16 @@ class BoardColumnCommandView(APIView):
                     .filter(pk=column_id, board=board)
                     .first()
                 )
-                if column is None or column.state == BoardColumn.State.REVIEW:
+                if (
+                    column is None
+                    or column.state == BoardColumn.State.REVIEW
+                    or column.is_archived
+                ):
                     raise BoardAdminError("not_found", "List not found.", 404)
 
                 before = _column_payload(column)
+                archived_task_audits: list[AuditEvent] = []
+
                 if command == "rename":
                     name = str(payload.get("name", "")).strip()
                     if not name or len(name) > 100:
@@ -423,7 +470,8 @@ class BoardColumnCommandView(APIView):
                     column.save(update_fields=["name"])
                     response_body: dict[str, object] = _column_payload(column)
                     action = "rename_list"
-                else:
+
+                elif command == "delete":
                     if not column.is_custom:
                         raise BoardAdminError(
                             "protected_list",
@@ -443,6 +491,108 @@ class BoardColumnCommandView(APIView):
                     }
                     action = "delete_list"
                     column.delete()
+
+                elif command == "set_color":
+                    color = str(payload.get("color", "")).strip().lower()
+                    if color not in LIST_COLORS:
+                        raise BoardAdminError(
+                            "invalid_color",
+                            "Choose one of the available list colors.",
+                            400,
+                        )
+                    column.color = color
+                    column.save(update_fields=["color"])
+                    response_body = _column_payload(column)
+                    action = "set_list_color"
+
+                elif command == "clear_color":
+                    column.color = ""
+                    column.save(update_fields=["color"])
+                    response_body = _column_payload(column)
+                    action = "clear_list_color"
+
+                elif command == "archive":
+                    if not column.is_custom:
+                        raise BoardAdminError(
+                            "protected_list",
+                            "Inbox, To Do, In Progress, Later, and Done are required workflow lists and cannot be archived.",
+                            409,
+                        )
+                    archived_at = timezone.now()
+                    column.is_archived = True
+                    column.archived_at = archived_at
+                    column.save(update_fields=["is_archived", "archived_at"])
+                    response_body = {
+                        **_column_payload(column),
+                        "archived": True,
+                    }
+                    action = "archive_list"
+
+                else:
+                    archived_at = timezone.now()
+                    tasks = list(
+                        Task.objects.select_for_update()
+                        .filter(
+                            column=column,
+                            is_cancelled=False,
+                            is_archived=False,
+                        )
+                        .order_by("position", "id")
+                    )
+                    board.revision += 1
+                    board.save(update_fields=["revision", "updated_at"])
+                    for task in tasks:
+                        previous_version = task.row_version
+                        Task.objects.filter(pk=task.pk).update(
+                            is_archived=True,
+                            archived_at=archived_at,
+                            row_version=F("row_version") + 1,
+                            recurrence_generation=F("recurrence_generation") + 1,
+                        )
+                        archived_task_audits.append(
+                            AuditEvent(
+                                board=board,
+                                board_revision=board.revision,
+                                task=task,
+                                actor=request.user,
+                                action="archive_task",
+                                reason=str(payload.get("reason", ""))[:2000],
+                                before={
+                                    "task_id": str(task.id),
+                                    "title": task.title,
+                                    "column_id": str(column.id),
+                                    "row_version": previous_version,
+                                    "is_archived": False,
+                                },
+                                after={
+                                    "task_id": str(task.id),
+                                    "is_archived": True,
+                                    "archived_at": archived_at.isoformat(),
+                                    "row_version": previous_version + 1,
+                                },
+                            )
+                        )
+                    if archived_task_audits:
+                        AuditEvent.objects.bulk_create(archived_task_audits)
+                    response_body = {
+                        "column_id": str(column.id),
+                        "name": column.name,
+                        "archived_cards": len(tasks),
+                    }
+                    action = "archive_all_cards"
+
+                    AuditEvent.objects.create(
+                        board=board,
+                        board_revision=board.revision,
+                        task=None,
+                        actor=request.user,
+                        action=action,
+                        reason=str(payload.get("reason", ""))[:2000],
+                        before=before,
+                        after=response_body,
+                    )
+                    response_body["board_revision"] = board.revision
+                    return 200, response_body
 
                 board.revision += 1
                 board.save(update_fields=["revision", "updated_at"])

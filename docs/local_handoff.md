@@ -40,7 +40,7 @@ The stop launchers stop the relevant web, scheduler, worker, proxy, and Vite pro
 
 Latest full verifier evidence:
 
-- `evidence/verify_all_20261006T033808Z.json`
+- `evidence/verify_all_20261006T053913Z.json`
 - `evidence/lan_access_20261002T051351Z.json`
 - `evidence/lan_login_throttle_20260930T021959Z.json`
 - `evidence/local_restart_cycle_20260929T054104Z.json`
@@ -57,7 +57,7 @@ The latest full verifier passed:
 - npm audit: 0 vulnerabilities
 - calendar fixtures
 - PostgreSQL connectivity
-- full automated backend/database test suite: 99 passing tests
+- full automated backend/database test suite: 102 passing tests
 - frontend UUID compatibility tests: 3 passing tests
 - Playwright Chrome E2E suite: 8 passing browser scenarios, including a Trello-style visual contract check
 - browser UI card workflow with 12 sequential moves, backward moves, same-column reorder, edit, delete, create-after-moves, reload and persistence
@@ -92,7 +92,11 @@ The runtime readiness endpoint currently reports healthy database, scheduler, an
 - Trello-style board shell with dark header, fixed Inbox rail, purple horizontal canvas, colored lists, card search, and bottom board dock
 - five protected workflow lists: Inbox, To Do, In Progress, Later, Done
 - quick Inbox capture plus direct `Add a card` controls inside every list
-- all board users can create additional custom lists with `+ Add another list`, rename them, and delete them when empty
+- all board users can create additional custom lists with `+ Add another list`
+- each list's 3-dot menu intentionally contains only list color controls, `Archive this list`, and `Archive all cards in this list`
+- list color palette persists in PostgreSQL and supports green, yellow, orange, red, purple, blue, teal, lime, pink, gray, plus `Remove color`
+- custom lists can be soft-archived; the five protected workflow lists remain visible and cannot be archived because Inbox/To Do/In Progress/Later/Done are system workflow dependencies
+- `Archive all cards in this list` is available on standard and custom lists; archived cards remain preserved in the database but disappear from active board/task/report/reminder/recurrence views
 - free drag/reorder between standard and custom lists; recurring cards still return specifically to Inbox and Done remains the completion state
 - administrator-only permanent board deletion with exact-name confirmation
 - permanent card deletion available to every board user, with optimistic concurrency protection

@@ -78,8 +78,16 @@ def _board_and_task_for_update(task_id) -> tuple[Board, Task]:
     task = (
         Task.objects.select_for_update(of=("self",))
         .select_related("column", "current_commitment", "current_owner")
-        .get(pk=task_id, board=board)
+        .filter(
+            pk=task_id,
+            board=board,
+            is_archived=False,
+            column__is_archived=False,
+        )
+        .first()
     )
+    if task is None:
+        raise DomainError("not_found", "Task not found.", status=404)
     return board, task
 
 
@@ -96,7 +104,7 @@ def _eligible_owner(board: Board, owner_id) -> Any:
 
 def _column(board: Board, state: str) -> BoardColumn:
     try:
-        return BoardColumn.objects.get(board=board, state=state)
+        return BoardColumn.objects.get(board=board, state=state, is_archived=False)
     except BoardColumn.DoesNotExist as exc:
         raise DomainError(
             "invalid_board", f"Board is missing the {state} column.", status=409
@@ -108,14 +116,14 @@ def _column_by_id(board: Board, column_id) -> BoardColumn:
         column = BoardColumn.objects.filter(board=board, pk=column_id).first()
     except (TypeError, ValueError):
         column = None
-    if column is None or column.state == BoardColumn.State.REVIEW:
+    if column is None or column.state == BoardColumn.State.REVIEW or column.is_archived:
         raise DomainError("invalid_column", "Target list does not exist on this board.", status=409)
     return column
 
 
 def _next_position(column: BoardColumn) -> int:
     current = (
-        Task.objects.filter(column=column, is_cancelled=False)
+        Task.objects.filter(column=column, is_cancelled=False, is_archived=False)
         .aggregate(value=Max("position"))
         .get("value")
     )
@@ -191,7 +199,11 @@ def _resequence_for_move(task: Task, target: BoardColumn, target_position: int |
     column_ids = {source_id, target_id}
     locked = list(
         Task.objects.select_for_update()
-        .filter(column_id__in=column_ids, is_cancelled=False)
+        .filter(
+            column_id__in=column_ids,
+            is_cancelled=False,
+            is_archived=False,
+        )
         .order_by("column_id", "position", "id")
     )
     source_items = [item for item in locked if item.column_id == source_id and item.id != task.id]

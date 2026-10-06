@@ -203,7 +203,13 @@ export async function createBoardColumn(
 export async function commandBoardColumn(
   boardId: string,
   columnId: string,
-  command: "rename" | "delete",
+  command:
+    | "rename"
+    | "delete"
+    | "set_color"
+    | "clear_color"
+    | "archive"
+    | "archive_all_cards",
   payload: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   return request(

@@ -61,7 +61,15 @@ def delete_task(
     expected_board_revision: int,
 ) -> dict[str, Any]:
     with transaction.atomic():
-        board_id = Task.objects.filter(pk=task_id).values_list("board_id", flat=True).first()
+        board_id = (
+            Task.objects.filter(
+                pk=task_id,
+                is_archived=False,
+                column__is_archived=False,
+            )
+            .values_list("board_id", flat=True)
+            .first()
+        )
         if board_id is None:
             raise DomainError("not_found", "Card not found.", status=404)
 
@@ -91,7 +99,7 @@ def delete_task(
         purge_task_dependencies([task.id])
         remaining = list(
             Task.objects.select_for_update()
-            .filter(column_id=column_id, is_cancelled=False)
+            .filter(column_id=column_id, is_cancelled=False, is_archived=False)
             .order_by("position", "id")
         )
         for position, item in enumerate(remaining):

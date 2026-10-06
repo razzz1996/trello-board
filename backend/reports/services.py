@@ -79,6 +79,8 @@ def calculate_report(
         Task.objects.filter(
             board_id__in=scope,
             committed_at__isnull=False,
+            is_archived=False,
+            column__is_archived=False,
             commitments__revision=1,
             commitments__due_at__gte=start_utc,
             commitments__due_at__lt=end_utc,
@@ -226,6 +228,8 @@ def calculate_report(
         Task.objects.filter(
             board_id__in=scope,
             is_cancelled=False,
+            is_archived=False,
+            column__is_archived=False,
             current_commitment__due_at__gte=tomorrow_start,
             current_commitment__due_at__lt=tomorrow_end,
         )

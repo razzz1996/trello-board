@@ -195,6 +195,19 @@ function InlineAddCard({
     </form>
   );
 }
+const LIST_COLOR_OPTIONS = [
+  { key: "green", label: "Green" },
+  { key: "yellow", label: "Yellow" },
+  { key: "orange", label: "Orange" },
+  { key: "red", label: "Red" },
+  { key: "purple", label: "Purple" },
+  { key: "blue", label: "Blue" },
+  { key: "teal", label: "Teal" },
+  { key: "lime", label: "Lime" },
+  { key: "pink", label: "Pink" },
+  { key: "gray", label: "Gray" },
+] as const;
+
 function ColumnMenu({
   snapshot,
   column,
@@ -205,25 +218,25 @@ function ColumnMenu({
   onChanged: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [name, setName] = useState(column.name);
+  const [colorOpen, setColorOpen] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  async function rename(event: FormEvent) {
-    event.preventDefault();
-    const cleaned = name.trim();
-    if (!cleaned) return;
+  async function runCommand(
+    command: "set_color" | "clear_color" | "archive" | "archive_all_cards",
+    payload: Record<string, unknown> = {},
+  ) {
     setBusy(true);
     setError("");
     try {
-      await commandBoardColumn(snapshot.board.id, column.id, "rename", {
+      await commandBoardColumn(snapshot.board.id, column.id, command, {
         expected_board_revision: snapshot.revision,
-        name: cleaned,
-        reason: "Renamed from board",
+        reason: "Updated from list actions",
+        ...payload,
       });
-      setOpen(false);
-      setRenaming(false);
+      if (command === "archive" || command === "archive_all_cards") {
+        setOpen(false);
+      }
       await onChanged();
     } catch (caught) {
       setError(errorMessage(caught));
@@ -232,22 +245,27 @@ function ColumnMenu({
     }
   }
 
-  async function remove() {
-    if (!window.confirm(`Delete the empty list "${column.name}"?`)) return;
-    setBusy(true);
-    setError("");
-    try {
-      await commandBoardColumn(snapshot.board.id, column.id, "delete", {
-        expected_board_revision: snapshot.revision,
-        reason: "Deleted from board",
-      });
-      setOpen(false);
-      await onChanged();
-    } catch (caught) {
-      setError(errorMessage(caught));
-    } finally {
-      setBusy(false);
+  async function archiveList() {
+    if (!column.is_custom) return;
+    if (
+      !window.confirm(
+        `Archive the list "${column.name}"? The list and its cards will be hidden from the active board but preserved.`,
+      )
+    ) {
+      return;
     }
+    await runCommand("archive");
+  }
+
+  async function archiveAllCards() {
+    if (
+      !window.confirm(
+        `Archive all ${column.tasks.length} card${column.tasks.length === 1 ? "" : "s"} in "${column.name}"? The list will remain visible.`,
+      )
+    ) {
+      return;
+    }
+    await runCommand("archive_all_cards");
   }
 
   return (
@@ -261,48 +279,86 @@ function ColumnMenu({
         •••
       </button>
       {open && (
-        <div className="trello-list-menu">
-          {renaming ? (
-            <form onSubmit={rename}>
-              <label>
-                List name
-                <input
-                  autoFocus
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  maxLength={100}
-                />
-              </label>
-              <div className="row-actions">
-                <button className="button trello-primary-button" disabled={busy}>
-                  Save
-                </button>
-                <button
-                  className="button button--ghost"
-                  type="button"
-                  onClick={() => setRenaming(false)}
-                >
-                  Cancel
-                </button>
+        <div className="trello-list-menu trello-list-menu--actions">
+          <div className="trello-list-menu__title">
+            <strong>List actions</strong>
+            <button
+              type="button"
+              aria-label="Close list actions"
+              onClick={() => setOpen(false)}
+            >
+              ×
+            </button>
+          </div>
+
+          <button
+            className="trello-list-menu__section-toggle"
+            type="button"
+            onClick={() => setColorOpen((value) => !value)}
+          >
+            <span>Change list color</span>
+            <span aria-hidden="true">{colorOpen ? "⌃" : "⌄"}</span>
+          </button>
+
+          {colorOpen && (
+            <div className="trello-list-colors" aria-label="List colors">
+              <div className="trello-list-colors__grid">
+                {LIST_COLOR_OPTIONS.map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    className="trello-color-swatch"
+                    data-color={option.key}
+                    aria-label={option.label}
+                    aria-pressed={column.color === option.key}
+                    disabled={busy}
+                    onClick={() => void runCommand("set_color", { color: option.key })}
+                  >
+                    {column.color === option.key && <span>✓</span>}
+                  </button>
+                ))}
               </div>
-            </form>
-          ) : (
-            <>
-              <button type="button" onClick={() => setRenaming(true)}>
-                Rename list
+              <button
+                className="trello-remove-color"
+                type="button"
+                disabled={busy || !column.color}
+                onClick={() => void runCommand("clear_color")}
+              >
+                × Remove color
               </button>
-              {column.is_custom && (
-                <button
-                  className="trello-list-menu__danger"
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void remove()}
-                >
-                  Delete list
-                </button>
-              )}
-            </>
+            </div>
           )}
+
+          <div className="trello-list-menu__divider" />
+
+          <button
+            className="trello-list-menu__archive"
+            type="button"
+            disabled={busy || !column.is_custom}
+            title={
+              column.is_custom
+                ? "Archive this list"
+                : "The five workflow lists are required and cannot be archived."
+            }
+            onClick={() => void archiveList()}
+          >
+            Archive this list
+          </button>
+          {!column.is_custom && (
+            <span className="trello-list-menu__hint">
+              Required workflow list — it cannot be archived.
+            </span>
+          )}
+
+          <button
+            className="trello-list-menu__archive"
+            type="button"
+            disabled={busy || column.tasks.length === 0}
+            onClick={() => void archiveAllCards()}
+          >
+            Archive all cards in this list
+          </button>
+
           {error && <span className="trello-inline-error">{error}</span>}
         </div>
       )}
@@ -347,6 +403,7 @@ function ColumnView({
         data-state={column.state}
         data-column-id={column.id}
         data-tone={tone}
+        data-color={column.color || undefined}
       >
         <header className="trello-list__header">
           <h2>{column.name}</h2>
@@ -398,10 +455,14 @@ function InboxRail({
       ref={setNodeRef}
       className={`trello-inbox ${isOver ? "trello-inbox--over" : ""}`}
       data-state={column.state}
+      data-color={column.color || undefined}
     >
       <header>
         <div><span aria-hidden="true">▣</span><h2>Inbox</h2></div>
-        <span className="trello-inbox__count">{column.tasks.length}</span>
+        <div className="trello-inbox__header-actions">
+          <span className="trello-inbox__count">{column.tasks.length}</span>
+          <ColumnMenu snapshot={snapshot} column={column} onChanged={onChanged} />
+        </div>
       </header>
       <InlineAddCard snapshot={snapshot} column={column} onChanged={onChanged} defaultOpen />
       <SortableContext

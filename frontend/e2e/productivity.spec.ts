@@ -113,7 +113,15 @@ function monitor(page: Page) {
     if (message.type() === "error") problems.push(`console: ${message.text()}`);
   });
   page.on("requestfailed", (request) => {
-    problems.push(`requestfailed: ${request.method()} ${request.url()} ${request.failure()?.errorText ?? ""}`);
+    const errorText = request.failure()?.errorText ?? "";
+    const expectedReloadAbort =
+      request.method() === "GET" &&
+      request.url().includes("/api/v1/boards/") &&
+      request.url().endsWith("/snapshot") &&
+      errorText === "net::ERR_ABORTED";
+    if (!expectedReloadAbort) {
+      problems.push(`requestfailed: ${request.method()} ${request.url()} ${errorText}`);
+    }
   });
   page.on("response", (response) => {
     if (response.status() >= 400) {
@@ -393,13 +401,12 @@ test("server-side session-generation revocation invalidates an open browser", as
 });
 
 
-test("custom list UI: add list, add card, drag out, rename, delete", async ({ page }) => {
+test("custom list UI: color, archive cards, archive list", async ({ page }) => {
   await login(page, env("E2E_MEMBER_USERNAME"));
   await openBoard(page);
   const assertClean = monitor(page);
 
   const listName = `Waiting ${Date.now()}`;
-  const renamedList = `${listName} renamed`;
   const cardTitle = `Custom list card ${Date.now()}`;
 
   await page.getByRole("button", { name: /Add another list/ }).click();
@@ -411,28 +418,33 @@ test("custom list UI: add list, add card, drag out, rename, delete", async ({ pa
     .filter({ has: page.getByRole("heading", { name: listName, exact: true }) });
   await expect(customList).toBeVisible();
 
+  await customList.getByRole("button", { name: `List actions for ${listName}` }).click();
+  await expect(page.getByRole("button", { name: "Rename list" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Delete list" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Purple" }).click();
+  await expect(customList).toHaveAttribute("data-color", "purple");
+
+  await page.reload();
+  customList = page
+    .locator(".trello-list")
+    .filter({ has: page.getByRole("heading", { name: listName, exact: true }) });
+  await expect(customList).toHaveAttribute("data-color", "purple");
+
   await customList.getByRole("button", { name: "Add a card" }).click();
   await page.getByLabel(`Add a card to ${listName}`).fill(cardTitle);
   await customList.getByRole("button", { name: "Add card", exact: true }).click();
   await expect(customList.locator(".task-card").filter({ hasText: cardTitle })).toBeVisible();
 
-  await dragCard(page, cardTitle, "TODO");
-  await expect(column(page, "TODO").locator(".task-card").filter({ hasText: cardTitle })).toBeVisible();
-
   await customList.getByRole("button", { name: `List actions for ${listName}` }).click();
-  await page.getByRole("button", { name: "Rename list" }).click();
-  await page.getByLabel("List name").fill(renamedList);
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-
-  customList = page
-    .locator(".trello-list")
-    .filter({ has: page.getByRole("heading", { name: renamedList, exact: true }) });
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Archive all cards in this list" }).click();
+  await expect(customList.locator(".task-card").filter({ hasText: cardTitle })).toHaveCount(0);
   await expect(customList).toBeVisible();
 
-  await customList.getByRole("button", { name: `List actions for ${renamedList}` }).click();
+  await customList.getByRole("button", { name: `List actions for ${listName}` }).click();
   page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "Delete list" }).click();
-  await expect(page.getByRole("heading", { name: renamedList, exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Archive this list" }).click();
+  await expect(page.getByRole("heading", { name: listName, exact: true })).toHaveCount(0);
 
   assertClean();
 });

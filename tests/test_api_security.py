@@ -9,6 +9,7 @@ from django.contrib.auth import get_user_model
 from django.test import RequestFactory
 from django.utils import timezone
 from rest_framework.test import APIClient
+from workitems.models import Task
 
 User = get_user_model()
 
@@ -821,3 +822,129 @@ def test_standard_lists_cannot_be_deleted():
     assert response.status_code == 409
     assert response.json()["code"] == "protected_list"
     assert BoardColumn.objects.filter(pk=todo.id).exists()
+
+
+def test_list_color_and_archive_actions_persist_and_hide_active_work():
+    admin = User.objects.create_user(username="list-actions-admin", password=None, is_staff=True)
+    member = User.objects.create_user(username="list-actions-member", password=None)
+    board = create_board(admin, member)
+    custom = BoardColumn.objects.create(
+        board=board,
+        state="CUSTOM_ARCHIVE_TEST",
+        name="Waiting",
+        position=20,
+        is_custom=True,
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=member)
+
+    color = client.post(
+        f"/api/v1/boards/{board.id}/columns/{custom.id}/commands/set_color",
+        {
+            "expected_board_revision": board.revision,
+            "color": "purple",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="set-list-color",
+    )
+    assert color.status_code == 200
+    custom.refresh_from_db()
+    board.refresh_from_db()
+    assert custom.color == "purple"
+
+    snapshot = client.get(f"/api/v1/boards/{board.id}/snapshot")
+    assert snapshot.status_code == 200
+    custom_row = next(row for row in snapshot.json()["columns"] if row["id"] == str(custom.id))
+    assert custom_row["color"] == "purple"
+
+    cleared = client.post(
+        f"/api/v1/boards/{board.id}/columns/{custom.id}/commands/clear_color",
+        {"expected_board_revision": board.revision},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="clear-list-color",
+    )
+    assert cleared.status_code == 200
+    custom.refresh_from_db()
+    board.refresh_from_db()
+    assert custom.color == ""
+
+    standard = BoardColumn.objects.get(board=board, state=BoardColumn.State.TODO)
+    protected = client.post(
+        f"/api/v1/boards/{board.id}/columns/{standard.id}/commands/archive",
+        {"expected_board_revision": board.revision},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="archive-protected-list",
+    )
+    assert protected.status_code == 409
+    assert protected.json()["code"] == "protected_list"
+
+    archived = client.post(
+        f"/api/v1/boards/{board.id}/columns/{custom.id}/commands/archive",
+        {"expected_board_revision": board.revision},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="archive-custom-list",
+    )
+    assert archived.status_code == 200
+    custom.refresh_from_db()
+    assert custom.is_archived is True
+    assert custom.archived_at is not None
+
+    snapshot = client.get(f"/api/v1/boards/{board.id}/snapshot")
+    assert snapshot.status_code == 200
+    assert str(custom.id) not in {row["id"] for row in snapshot.json()["columns"]}
+
+
+def test_archive_all_cards_preserves_rows_and_frees_active_positions():
+    admin = User.objects.create_user(username="archive-cards-admin", password=None, is_staff=True)
+    member = User.objects.create_user(username="archive-cards-member", password=None)
+    board = create_board(admin, member)
+    todo = BoardColumn.objects.get(board=board, state=BoardColumn.State.TODO)
+
+    first = Task.objects.create(
+        board=board,
+        column=todo,
+        title="Archive me one",
+        position=0,
+        created_by=member,
+    )
+    second = Task.objects.create(
+        board=board,
+        column=todo,
+        title="Archive me two",
+        position=1,
+        created_by=member,
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=member)
+    response = client.post(
+        f"/api/v1/boards/{board.id}/columns/{todo.id}/commands/archive_all_cards",
+        {"expected_board_revision": board.revision},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="archive-all-cards",
+    )
+    assert response.status_code == 200
+    assert response.json()["archived_cards"] == 2
+
+    first.refresh_from_db()
+    second.refresh_from_db()
+    board.refresh_from_db()
+    assert first.is_archived is True
+    assert second.is_archived is True
+    assert first.archived_at is not None
+    assert second.archived_at is not None
+
+    snapshot = client.get(f"/api/v1/boards/{board.id}/snapshot")
+    assert snapshot.status_code == 200
+    todo_row = next(row for row in snapshot.json()["columns"] if row["id"] == str(todo.id))
+    assert todo_row["tasks"] == []
+
+    replacement = Task.objects.create(
+        board=board,
+        column=todo,
+        title="Replacement active card",
+        position=0,
+        created_by=member,
+    )
+    assert replacement.position == 0

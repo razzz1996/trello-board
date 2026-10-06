@@ -74,7 +74,13 @@ def create_task_notification(job: Job) -> Notification | None:
         .first()
     )
     user = User.objects.filter(pk=recipient_id).first()
-    if task is None or user is None or not _eligible_recipient(user, task):
+    if (
+        task is None
+        or user is None
+        or task.is_archived
+        or task.column.is_archived
+        or not _eligible_recipient(user, task)
+    ):
         return None
     if not _current_schedule_generation(payload, job.generation):
         return None

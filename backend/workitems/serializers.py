@@ -165,6 +165,8 @@ class TaskSerializer(serializers.ModelSerializer):
             "committed_at",
             "current_commitment",
             "is_cancelled",
+            "is_archived",
+            "archived_at",
             "cancelled_at",
             "cancelled_reason",
             "checklist_items",

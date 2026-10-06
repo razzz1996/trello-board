@@ -140,6 +140,8 @@ export interface Task {
   committed_at: string | null;
   current_commitment: Commitment | null;
   is_cancelled: boolean;
+  is_archived: boolean;
+  archived_at: string | null;
   cancelled_at: string | null;
   cancelled_reason: string;
   checklist_items: ChecklistItem[];
@@ -156,6 +158,9 @@ export interface BoardColumn {
   name: string;
   position: number;
   is_custom: boolean;
+  color: string;
+  is_archived: boolean;
+  archived_at: string | null;
   tasks: Task[];
 }
 

@@ -46,6 +46,8 @@ def scheduler_tick() -> dict[str, int]:
         Task.objects.filter(
             recurrence_next_at__lte=observed_at,
             is_cancelled=False,
+            is_archived=False,
+            column__is_archived=False,
             board__archived=False,
         )
         .exclude(recurrence_frequency=Task.Recurrence.NONE)

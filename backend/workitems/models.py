@@ -56,6 +56,8 @@ class Task(models.Model):
         "CommitmentRevision", null=True, blank=True, on_delete=models.PROTECT, related_name="+"
     )
     is_cancelled = models.BooleanField(default=False)
+    is_archived = models.BooleanField(default=False)
+    archived_at = models.DateTimeField(null=True, blank=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)
     cancelled_reason = models.TextField(blank=True)
     created_by = models.ForeignKey(
@@ -93,14 +95,14 @@ class Task(models.Model):
             ),
             models.UniqueConstraint(
                 fields=["column", "position"],
-                condition=Q(is_cancelled=False),
+                condition=Q(is_cancelled=False, is_archived=False),
                 name="uq_active_task_position",
             ),
         ]
         indexes = [
             models.Index(fields=["board", "column"]),
-            models.Index(fields=["current_owner", "is_cancelled"]),
-            models.Index(fields=["priority", "is_cancelled"]),
+            models.Index(fields=["current_owner", "is_cancelled", "is_archived"]),
+            models.Index(fields=["priority", "is_cancelled", "is_archived"]),
             models.Index(
                 fields=["recurrence_frequency", "recurrence_next_at"],
                 name="workitems_recurrence_due_idx",

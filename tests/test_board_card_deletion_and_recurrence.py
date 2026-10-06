@@ -579,3 +579,46 @@ def test_scheduler_prunes_expired_database_sessions():
     assert not Session.objects.filter(session_key="expired-session-row").exists()
     assert Session.objects.filter(session_key="active-session-row").exists()
     assert result["expired_sessions_pruned"] >= 1
+
+
+def test_archived_repeating_card_does_not_reactivate():
+    _, member, board = make_board()
+    task = create_task(actor=member, board_id=board.id, title="Archived repeat")
+    next_at = timezone.now() + timedelta(hours=1)
+    configure_recurrence(
+        task,
+        frequency=Task.Recurrence.DAILY,
+        next_at=next_at,
+    )
+    task.save(
+        update_fields=[
+            "recurrence_frequency",
+            "recurrence_next_at",
+            "recurrence_anchor_day",
+            "recurrence_generation",
+            "updated_at",
+        ]
+    )
+
+    task.is_archived = True
+    task.archived_at = timezone.now()
+    task.recurrence_generation += 1
+    task.save(
+        update_fields=[
+            "is_archived",
+            "archived_at",
+            "recurrence_generation",
+            "updated_at",
+        ]
+    )
+
+    triggered = trigger_recurrence(
+        task_id=task.id,
+        generation=task.recurrence_generation,
+        observed_at=next_at + timedelta(minutes=1),
+    )
+
+    task.refresh_from_db()
+    assert triggered is False
+    assert task.is_archived is True
+    assert task.column.state == BoardColumn.State.BACKLOG

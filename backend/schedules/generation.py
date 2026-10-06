@@ -38,11 +38,15 @@ def _active_owner(board: Board, owner_id: str) -> bool:
 
 
 def _column(board: Board, state: str) -> BoardColumn:
-    return BoardColumn.objects.get(board=board, state=state)
+    return BoardColumn.objects.get(board=board, state=state, is_archived=False)
 
 
 def _next_position(column: BoardColumn) -> int:
-    current = Task.objects.filter(column=column, is_cancelled=False).aggregate(
+    current = Task.objects.filter(
+        column=column,
+        is_cancelled=False,
+        is_archived=False,
+    ).aggregate(
         value=Max("position")
     )["value"]
     return int(current or -1) + 1

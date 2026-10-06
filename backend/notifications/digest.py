@@ -25,6 +25,8 @@ def create_personal_digest(job: Job) -> Notification | None:
         Task.objects.filter(
             current_owner=user,
             is_cancelled=False,
+            is_archived=False,
+            column__is_archived=False,
             board__memberships__user=user,
             board__memberships__is_active=True,
         )

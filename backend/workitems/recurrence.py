@@ -93,13 +93,13 @@ def _move_to_inbox(task: Task, inbox: BoardColumn) -> None:
     source_id = task.column_id
     target_items = list(
         Task.objects.select_for_update()
-        .filter(column=inbox, is_cancelled=False)
+        .filter(column=inbox, is_cancelled=False, is_archived=False)
         .exclude(pk=task.pk)
         .order_by("position", "id")
     )
     source_items = list(
         Task.objects.select_for_update()
-        .filter(column_id=source_id, is_cancelled=False)
+        .filter(column_id=source_id, is_cancelled=False, is_archived=False)
         .exclude(pk=task.pk)
         .order_by("position", "id")
     )
@@ -141,6 +141,8 @@ def trigger_recurrence(
         if (
             board.archived
             or task.is_cancelled
+            or task.is_archived
+            or task.column.is_archived
             or task.recurrence_frequency == Task.Recurrence.NONE
             or task.recurrence_next_at is None
             or task.recurrence_generation != generation

@@ -85,7 +85,7 @@ def _eligible(notification: Notification) -> bool:
             snapshot = notification.report_snapshot
             return snapshot is not None and snapshot_scope_authorized(snapshot, recipient)
         return False
-    if task.is_cancelled:
+    if task.is_cancelled or task.is_archived or task.column.is_archived:
         return False
     membership = BoardMembership.objects.filter(
         board=task.board,

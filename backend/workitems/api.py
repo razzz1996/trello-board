@@ -54,7 +54,11 @@ def _serialized(task: Task) -> dict[str, Any]:
 class TaskCollectionView(APIView):
     def get(self, request):
         qs = (
-            Task.objects.filter(board__archived=False)
+            Task.objects.filter(
+                board__archived=False,
+                is_archived=False,
+                column__is_archived=False,
+            )
             .select_related(
                 "board",
                 "column",
@@ -193,7 +197,15 @@ MANAGER_COMMANDS = {
 
 class TaskCommandView(APIView):
     def _authorize_replay(self, request, task_id, command: str) -> None:
-        task = Task.objects.only("board_id", "current_owner_id").filter(pk=task_id).first()
+        task = (
+            Task.objects.only("board_id", "current_owner_id")
+            .filter(
+                pk=task_id,
+                is_archived=False,
+                column__is_archived=False,
+            )
+            .first()
+        )
         if task is None:
             raise Http404
         if command in MANAGER_COMMANDS:
