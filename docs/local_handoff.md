@@ -2,14 +2,14 @@
 
 ## Current local access
 
-- Team LAN website: detected dynamically by `Start eMEGA Team Access.cmd` (current host: `http://172.16.0.142:5173/`)
+- Team LAN website: `http://desktop-1bgou2m:5173/` (stable office hostname; current IP fallback: `http://172.16.0.178:5173/`)
 - Standard host-only website: `http://127.0.0.1:8080/`
 - Initial administrator username: `raz`
 - Administrator password: known only to the operator; it is not stored in project documentation.
 - Environment: `development`
 - Slack mode: `off`
 
-The Team Access launcher detects the host's current Ethernet address automatically. The current address is `172.16.0.142`; it may change if DHCP assigns a new address. The Windows Firewall rule permits TCP 5173 only from the local `172.16.0.0/23` subnet. Waitress, Caddy, and PostgreSQL remain loopback-only and are reached through Vite's same-origin API proxy.
+The Team Access launcher still detects the current Ethernet address for diagnostics and fallback, but Vite binds to `0.0.0.0:5173` so a DHCP address change does not terminate the listener. Team members should use the stable machine-name URL `http://desktop-1bgou2m:5173/`; Windows name resolution maps it to the current LAN address. The current IP fallback is `172.16.0.178`. The Windows Firewall rule permits TCP 5173 only from the local `172.16.0.0/23` subnet. Waitress, Caddy, and PostgreSQL remain loopback-only and are reached through Vite's same-origin API proxy.
 
 ## One-click start and stop
 
@@ -20,7 +20,7 @@ Four desktop launchers are available:
 - `Start eMEGA Team Access.cmd` â€” office LAN mode
 - `Stop eMEGA Team Access.cmd`
 
-The Team Access launcher checks PostgreSQL, starts Waitress, scheduler, worker, and Caddy, then runs Vite on the currently detected Ethernet address at port 5173 with `--strictPort`. It waits for API readiness and opens the LAN URL.
+The Team Access launcher checks PostgreSQL, starts Waitress, scheduler, worker, and Caddy, then runs Vite on `0.0.0.0:5173` with `--strictPort`. It waits for API readiness through the current detected Ethernet address and opens the stable hostname URL.
 
 The stop launchers stop the relevant web, scheduler, worker, proxy, and Vite processes. PostgreSQL remains running as the Windows service `postgresql-x64-18`.
 

@@ -61,6 +61,21 @@ if lan_host:
         ]
     )
 
+lan_hostname = os.environ.get("PRODUCTIVITY_LAN_HOSTNAME", "").strip().lower()
+if lan_hostname:
+    if ENVIRONMENT != "development":
+        raise RuntimeError("PRODUCTIVITY_LAN_HOSTNAME is only permitted in development")
+    normalized_hostname = lan_hostname.replace("-", "").replace(".", "")
+    if not normalized_hostname.isalnum():
+        raise RuntimeError("PRODUCTIVITY_LAN_HOSTNAME contains invalid characters")
+    ALLOWED_HOSTS.append(lan_hostname)
+    CSRF_TRUSTED_ORIGINS.extend(
+        [
+            f"http://{lan_hostname}:5173",
+            f"http://{lan_hostname}:8080",
+        ]
+    )
+
 if private_base_url:
     parsed = urlparse(private_base_url)
     if not parsed.hostname or parsed.scheme != "https":

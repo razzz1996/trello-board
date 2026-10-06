@@ -11,6 +11,7 @@ $env:PRODUCTIVITY_DB_PASSWORD_FILE = Join-Path $ProjectRoot "runtime\secrets\pos
 $env:PRODUCTIVITY_DB_HOST = "127.0.0.1"
 $env:PRODUCTIVITY_DB_PORT = "5432"
 $env:PRODUCTIVITY_LAN_HOST = $lan.Host
+$env:PRODUCTIVITY_LAN_HOSTNAME = [System.Net.Dns]::GetHostName()
 $env:PRODUCTIVITY_MAINTENANCE_DB_USER = "productivity_maintenance"
 $env:PRODUCTIVITY_MAINTENANCE_DB_PASSWORD_FILE = Join-Path $ProjectRoot "runtime\secrets\postgres_maintenance_secret.txt"
 $env:PYTHONPATH = Join-Path $ProjectRoot "backend"

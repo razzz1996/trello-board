@@ -27,15 +27,18 @@ Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @(
     "-ProjectRoot", ('"' + $ProjectRoot + '"'), "-LanHost", $LanHost, "-Port", $Port
 )
 
-$url = "http://${LanHost}:$Port/"
+$stableHost = [System.Net.Dns]::GetHostName().ToLowerInvariant()
+$ipUrl = "http://" + $LanHost + ":" + $Port + "/"
+$stableUrl = "http://" + $stableHost + ":" + $Port + "/"
 $deadline = (Get-Date).AddSeconds(25)
 do {
     Start-Sleep -Milliseconds 500
     try {
-        $ready = Invoke-RestMethod -Uri ($url + "api/v1/health/ready") -TimeoutSec 2
+        $ready = Invoke-RestMethod -Uri ($ipUrl + "api/v1/health/ready") -TimeoutSec 2
         if ($ready.status -eq "ready") {
-            Start-Process $url
-            Write-Host "eMEGA team access is ready: $url" -ForegroundColor Green
+            Start-Process $stableUrl
+            Write-Host "eMEGA team access is ready: $stableUrl" -ForegroundColor Green
+            Write-Host "Current IP fallback: $ipUrl" -ForegroundColor DarkGray
             Write-Host "Allowed office subnet: $($lan.NetworkCidr)" -ForegroundColor DarkGray
             exit 0
         }
@@ -44,4 +47,4 @@ do {
     }
 } while ((Get-Date) -lt $deadline)
 
-throw "LAN access did not become ready within 25 seconds for $url"
+throw "LAN access did not become ready within 25 seconds for $ipUrl"
