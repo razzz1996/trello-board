@@ -118,7 +118,13 @@ textarea { resize: vertical; }
 }
 .modal {
   width: min(100%, 680px); max-height: calc(100vh - 48px); overflow-y: auto;
-  background: white; border-radius: 16px; box-shadow: 0 28px 80px rgba(15,23,42,.28); padding: 20px;
+  background: white; color: #172033; border-radius: 16px;
+  box-shadow: 0 28px 80px rgba(15,23,42,.28); padding: 20px;
+}
+
+/* Board pages use light text globally. Reset light-background modals to dark readable text. */
+.trello-board-page .modal {
+  color: #172033;
 }
 .modal__header { display: flex; justify-content: space-between; gap: 14px; align-items: center; margin-bottom: 14px; }
 .modal__header h2 { margin: 0; }
@@ -1230,34 +1236,34 @@ button.trello-add-list:hover { background: rgba(255,255,255,.40); }
 }
 .trello-color-swatch[data-color="green"],
 .trello-list[data-color="green"],
-.trello-inbox[data-color="green"] { background: #216e4e; }
+.trello-inbox[data-color="green"] { background: #7bc86c; }
 .trello-color-swatch[data-color="yellow"],
 .trello-list[data-color="yellow"],
-.trello-inbox[data-color="yellow"] { background: #7f5f01; }
+.trello-inbox[data-color="yellow"] { background: #f5cd47; }
 .trello-color-swatch[data-color="orange"],
 .trello-list[data-color="orange"],
-.trello-inbox[data-color="orange"] { background: #a54800; }
+.trello-inbox[data-color="orange"] { background: #f3a712; }
 .trello-color-swatch[data-color="red"],
 .trello-list[data-color="red"],
-.trello-inbox[data-color="red"] { background: #ae2e24; }
+.trello-inbox[data-color="red"] { background: #ef7564; }
 .trello-color-swatch[data-color="purple"],
 .trello-list[data-color="purple"],
-.trello-inbox[data-color="purple"] { background: #803fa5; }
+.trello-inbox[data-color="purple"] { background: #9f8fef; }
 .trello-color-swatch[data-color="blue"],
 .trello-list[data-color="blue"],
-.trello-inbox[data-color="blue"] { background: #0c66e4; }
+.trello-inbox[data-color="blue"] { background: #579dff; }
 .trello-color-swatch[data-color="teal"],
 .trello-list[data-color="teal"],
-.trello-inbox[data-color="teal"] { background: #1d7f8c; }
+.trello-inbox[data-color="teal"] { background: #6cc3e0; }
 .trello-color-swatch[data-color="lime"],
 .trello-list[data-color="lime"],
-.trello-inbox[data-color="lime"] { background: #4c6b1f; }
+.trello-inbox[data-color="lime"] { background: #94c748; }
 .trello-color-swatch[data-color="pink"],
 .trello-list[data-color="pink"],
-.trello-inbox[data-color="pink"] { background: #a23a72; }
+.trello-inbox[data-color="pink"] { background: #e774bb; }
 .trello-color-swatch[data-color="gray"],
 .trello-list[data-color="gray"],
-.trello-inbox[data-color="gray"] { background: #626f86; }
+.trello-inbox[data-color="gray"] { background: #8590a2; }
 .trello-remove-color {
   min-height: 31px;
   border: 1px solid #565b63 !important;
@@ -1307,4 +1313,708 @@ button.trello-add-list:hover { background: rgba(255,255,255,.40); }
 .trello-inbox .trello-list-menu {
   left: 0;
   right: auto;
+}
+
+/* Expanded pastel gradient palette + independent list text colors */
+.trello-list-menu--actions {
+  max-height: min(78vh, 680px);
+  overflow-y: auto;
+}
+.trello-list-colors__grid--pastel {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+}
+.trello-color-swatch {
+  min-width: 0;
+  background-size: 140% 140%;
+}
+.trello-color-swatch[aria-pressed="true"] {
+  outline-color: #ffffff;
+}
+.trello-color-swatch[data-color="rose-1"],
+.trello-list[data-color="rose-1"],
+.trello-inbox[data-color="rose-1"] { background: linear-gradient(145deg, #fff0f4 0%, #ffd9e4 100%); }
+.trello-color-swatch[data-color="rose-2"],
+.trello-list[data-color="rose-2"],
+.trello-inbox[data-color="rose-2"] { background: linear-gradient(145deg, #ffdce8 0%, #f8b8cb 100%); }
+.trello-color-swatch[data-color="rose-3"],
+.trello-list[data-color="rose-3"],
+.trello-inbox[data-color="rose-3"] { background: linear-gradient(145deg, #f7c4d5 0%, #e99ab5 100%); }
+
+.trello-color-swatch[data-color="peach-1"],
+.trello-list[data-color="peach-1"],
+.trello-inbox[data-color="peach-1"] { background: linear-gradient(145deg, #fff3e9 0%, #ffddc5 100%); }
+.trello-color-swatch[data-color="peach-2"],
+.trello-list[data-color="peach-2"],
+.trello-inbox[data-color="peach-2"] { background: linear-gradient(145deg, #ffe1cc 0%, #ffc29b 100%); }
+.trello-color-swatch[data-color="peach-3"],
+.trello-list[data-color="peach-3"],
+.trello-inbox[data-color="peach-3"] { background: linear-gradient(145deg, #ffcaa8 0%, #f3a878 100%); }
+
+.trello-color-swatch[data-color="amber-1"],
+.trello-list[data-color="amber-1"],
+.trello-inbox[data-color="amber-1"] { background: linear-gradient(145deg, #fff9d9 0%, #ffefaa 100%); }
+.trello-color-swatch[data-color="amber-2"],
+.trello-list[data-color="amber-2"],
+.trello-inbox[data-color="amber-2"] { background: linear-gradient(145deg, #fff0ad 0%, #f8dc78 100%); }
+.trello-color-swatch[data-color="amber-3"],
+.trello-list[data-color="amber-3"],
+.trello-inbox[data-color="amber-3"] { background: linear-gradient(145deg, #f8df87 0%, #e9c45d 100%); }
+
+.trello-color-swatch[data-color="mint-1"],
+.trello-list[data-color="mint-1"],
+.trello-inbox[data-color="mint-1"] { background: linear-gradient(145deg, #ecfff5 0%, #c9f3dc 100%); }
+.trello-color-swatch[data-color="mint-2"],
+.trello-list[data-color="mint-2"],
+.trello-inbox[data-color="mint-2"] { background: linear-gradient(145deg, #d2f4e1 0%, #a8dfc1 100%); }
+.trello-color-swatch[data-color="mint-3"],
+.trello-list[data-color="mint-3"],
+.trello-inbox[data-color="mint-3"] { background: linear-gradient(145deg, #b5e4ca 0%, #83c8a4 100%); }
+
+.trello-color-swatch[data-color="aqua-1"],
+.trello-list[data-color="aqua-1"],
+.trello-inbox[data-color="aqua-1"] { background: linear-gradient(145deg, #edfdff 0%, #c9f1f2 100%); }
+.trello-color-swatch[data-color="aqua-2"],
+.trello-list[data-color="aqua-2"],
+.trello-inbox[data-color="aqua-2"] { background: linear-gradient(145deg, #cdf1f2 0%, #a3dde1 100%); }
+.trello-color-swatch[data-color="aqua-3"],
+.trello-list[data-color="aqua-3"],
+.trello-inbox[data-color="aqua-3"] { background: linear-gradient(145deg, #acdfe2 0%, #7cc7cd 100%); }
+
+.trello-color-swatch[data-color="sky-1"],
+.trello-list[data-color="sky-1"],
+.trello-inbox[data-color="sky-1"] { background: linear-gradient(145deg, #eef7ff 0%, #cfe7ff 100%); }
+.trello-color-swatch[data-color="sky-2"],
+.trello-list[data-color="sky-2"],
+.trello-inbox[data-color="sky-2"] { background: linear-gradient(145deg, #d4e9ff 0%, #a9d0fb 100%); }
+.trello-color-swatch[data-color="sky-3"],
+.trello-list[data-color="sky-3"],
+.trello-inbox[data-color="sky-3"] { background: linear-gradient(145deg, #b6d7fb 0%, #86b9ec 100%); }
+
+.trello-color-swatch[data-color="lavender-1"],
+.trello-list[data-color="lavender-1"],
+.trello-inbox[data-color="lavender-1"] { background: linear-gradient(145deg, #f5f0ff 0%, #dfd2ff 100%); }
+.trello-color-swatch[data-color="lavender-2"],
+.trello-list[data-color="lavender-2"],
+.trello-inbox[data-color="lavender-2"] { background: linear-gradient(145deg, #e4d8ff 0%, #c5aff2 100%); }
+.trello-color-swatch[data-color="lavender-3"],
+.trello-list[data-color="lavender-3"],
+.trello-inbox[data-color="lavender-3"] { background: linear-gradient(145deg, #cbb7f3 0%, #aa90dc 100%); }
+
+.trello-color-swatch[data-color="lilac-1"],
+.trello-list[data-color="lilac-1"],
+.trello-inbox[data-color="lilac-1"] { background: linear-gradient(145deg, #fff0ff 0%, #efd0ef 100%); }
+.trello-color-swatch[data-color="lilac-2"],
+.trello-list[data-color="lilac-2"],
+.trello-inbox[data-color="lilac-2"] { background: linear-gradient(145deg, #f1d5f1 0%, #dcb1df 100%); }
+.trello-color-swatch[data-color="lilac-3"],
+.trello-list[data-color="lilac-3"],
+.trello-inbox[data-color="lilac-3"] { background: linear-gradient(145deg, #dfb9e0 0%, #c38fc7 100%); }
+
+.trello-color-swatch[data-color="blush-1"],
+.trello-list[data-color="blush-1"],
+.trello-inbox[data-color="blush-1"] { background: linear-gradient(145deg, #fff1f7 0%, #f9d5e6 100%); }
+.trello-color-swatch[data-color="blush-2"],
+.trello-list[data-color="blush-2"],
+.trello-inbox[data-color="blush-2"] { background: linear-gradient(145deg, #f9d9e8 0%, #eeb5d0 100%); }
+.trello-color-swatch[data-color="blush-3"],
+.trello-list[data-color="blush-3"],
+.trello-inbox[data-color="blush-3"] { background: linear-gradient(145deg, #efbed3 0%, #d995b8 100%); }
+
+.trello-color-swatch[data-color="slate-1"],
+.trello-list[data-color="slate-1"],
+.trello-inbox[data-color="slate-1"] { background: linear-gradient(145deg, #f4f6f9 0%, #dfe5ed 100%); }
+.trello-color-swatch[data-color="slate-2"],
+.trello-list[data-color="slate-2"],
+.trello-inbox[data-color="slate-2"] { background: linear-gradient(145deg, #e4e9f0 0%, #c8d0dc 100%); }
+.trello-color-swatch[data-color="slate-3"],
+.trello-list[data-color="slate-3"],
+.trello-inbox[data-color="slate-3"] { background: linear-gradient(145deg, #ccd4df 0%, #aab5c4 100%); }
+
+/* Pastel backgrounds default to readable dark ink unless the user explicitly overrides it. */
+.trello-list[data-color*="-1"],
+.trello-list[data-color*="-2"],
+.trello-list[data-color*="-3"],
+.trello-inbox[data-color*="-1"],
+.trello-inbox[data-color*="-2"],
+.trello-inbox[data-color*="-3"] {
+  --list-text: #172b4d;
+  --list-text-muted: rgba(23, 43, 77, .72);
+  --list-hover: rgba(23, 43, 77, .09);
+  color: var(--list-text);
+}
+.trello-list[data-text-color="ink"],
+.trello-inbox[data-text-color="ink"] { --list-text: #172b4d; --list-text-muted: rgba(23,43,77,.72); --list-hover: rgba(23,43,77,.09); }
+.trello-list[data-text-color="charcoal"],
+.trello-inbox[data-text-color="charcoal"] { --list-text: #2f343d; --list-text-muted: rgba(47,52,61,.72); --list-hover: rgba(47,52,61,.09); }
+.trello-list[data-text-color="navy"],
+.trello-inbox[data-text-color="navy"] { --list-text: #183153; --list-text-muted: rgba(24,49,83,.72); --list-hover: rgba(24,49,83,.09); }
+.trello-list[data-text-color="plum"],
+.trello-inbox[data-text-color="plum"] { --list-text: #5b315d; --list-text-muted: rgba(91,49,93,.72); --list-hover: rgba(91,49,93,.09); }
+.trello-list[data-text-color="forest"],
+.trello-inbox[data-text-color="forest"] { --list-text: #214c3b; --list-text-muted: rgba(33,76,59,.72); --list-hover: rgba(33,76,59,.09); }
+.trello-list[data-text-color="white"],
+.trello-inbox[data-text-color="white"] { --list-text: #ffffff; --list-text-muted: rgba(255,255,255,.78); --list-hover: rgba(255,255,255,.12); }
+
+.trello-list[data-color*="-"] .trello-list__header h2,
+.trello-list[data-text-color] .trello-list__header h2,
+.trello-inbox[data-color*="-"] > header,
+.trello-inbox[data-text-color] > header {
+  color: var(--list-text);
+}
+.trello-list[data-color*="-"] .trello-list__header-actions > span,
+.trello-list[data-text-color] .trello-list__header-actions > span,
+.trello-inbox[data-color*="-"] .trello-inbox__count,
+.trello-inbox[data-text-color] .trello-inbox__count {
+  color: var(--list-text-muted);
+}
+.trello-list[data-color*="-"] .trello-list-menu-button,
+.trello-list[data-text-color] .trello-list-menu-button,
+.trello-inbox[data-color*="-"] .trello-list-menu-button,
+.trello-inbox[data-text-color] .trello-list-menu-button,
+.trello-list[data-color*="-"] .trello-add-card,
+.trello-list[data-text-color] .trello-add-card,
+.trello-inbox[data-color*="-"] .trello-add-card,
+.trello-inbox[data-text-color] .trello-add-card {
+  color: var(--list-text);
+}
+.trello-list[data-color*="-"] .trello-list-menu-button:hover,
+.trello-list[data-text-color] .trello-list-menu-button:hover,
+.trello-list[data-color*="-"] .trello-add-card:hover,
+.trello-list[data-text-color] .trello-add-card:hover {
+  background: var(--list-hover);
+  color: var(--list-text);
+}
+.trello-list[data-color*="-"] .trello-list__empty,
+.trello-list[data-text-color] .trello-list__empty {
+  border-color: color-mix(in srgb, var(--list-text) 24%, transparent);
+  color: var(--list-text-muted);
+}
+
+.trello-text-colors {
+  display: grid;
+  gap: 5px;
+  padding: 2px 1px 10px;
+}
+.trello-text-color-swatch {
+  display: grid;
+  grid-template-columns: 34px 1fr 20px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #f4f5f7;
+  text-align: left;
+  cursor: pointer;
+}
+.trello-text-color-swatch:hover:not(:disabled) { background: #34373b; }
+.trello-text-color-swatch__sample {
+  display: grid;
+  place-items: center;
+  height: 26px;
+  border-radius: 5px;
+  background: #eef1f5;
+  font-size: .78rem;
+  font-weight: 800;
+}
+.trello-text-color-swatch[data-text-color="auto"] .trello-text-color-swatch__sample { color: #172b4d; background: linear-gradient(135deg, #fff0f4, #d4e9ff); }
+.trello-text-color-swatch[data-text-color="ink"] .trello-text-color-swatch__sample { color: #172b4d; }
+.trello-text-color-swatch[data-text-color="charcoal"] .trello-text-color-swatch__sample { color: #2f343d; }
+.trello-text-color-swatch[data-text-color="navy"] .trello-text-color-swatch__sample { color: #183153; }
+.trello-text-color-swatch[data-text-color="plum"] .trello-text-color-swatch__sample { color: #5b315d; }
+.trello-text-color-swatch[data-text-color="forest"] .trello-text-color-swatch__sample { color: #214c3b; }
+.trello-text-color-swatch[data-text-color="white"] .trello-text-color-swatch__sample { color: #fff; background: #59636f; }
+.trello-text-color-swatch strong { justify-self: end; }
+
+/* Dark & rich list palette: designed for strong white-text contrast. */
+.trello-color-group-label {
+  display: block;
+  margin: 3px 2px 1px;
+  color: #b6bac1;
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.trello-list-colors__grid--dark {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+  margin-bottom: 5px;
+}
+.trello-color-swatch--dark {
+  border-color: rgba(255,255,255,.28);
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0,0,0,.25);
+}
+
+.trello-color-swatch[data-color="navy1"],
+.trello-list[data-color="navy1"],
+.trello-inbox[data-color="navy1"] { background: linear-gradient(145deg, #365b87 0%, #27456d 100%); }
+.trello-color-swatch[data-color="navy2"],
+.trello-list[data-color="navy2"],
+.trello-inbox[data-color="navy2"] { background: linear-gradient(145deg, #29496f 0%, #1d3657 100%); }
+.trello-color-swatch[data-color="navy3"],
+.trello-list[data-color="navy3"],
+.trello-inbox[data-color="navy3"] { background: linear-gradient(145deg, #1d3557 0%, #10243f 100%); }
+
+.trello-color-swatch[data-color="ocean1"],
+.trello-list[data-color="ocean1"],
+.trello-inbox[data-color="ocean1"] { background: linear-gradient(145deg, #26758a 0%, #195d70 100%); }
+.trello-color-swatch[data-color="ocean2"],
+.trello-list[data-color="ocean2"],
+.trello-inbox[data-color="ocean2"] { background: linear-gradient(145deg, #1d6276 0%, #104b60 100%); }
+.trello-color-swatch[data-color="ocean3"],
+.trello-list[data-color="ocean3"],
+.trello-inbox[data-color="ocean3"] { background: linear-gradient(145deg, #164f61 0%, #0b3948 100%); }
+
+.trello-color-swatch[data-color="teald1"],
+.trello-list[data-color="teald1"],
+.trello-inbox[data-color="teald1"] { background: linear-gradient(145deg, #267a75 0%, #1b625f 100%); }
+.trello-color-swatch[data-color="teald2"],
+.trello-list[data-color="teald2"],
+.trello-inbox[data-color="teald2"] { background: linear-gradient(145deg, #1b6662 0%, #12504d 100%); }
+.trello-color-swatch[data-color="teald3"],
+.trello-list[data-color="teald3"],
+.trello-inbox[data-color="teald3"] { background: linear-gradient(145deg, #14534f 0%, #0b3d3a 100%); }
+
+.trello-color-swatch[data-color="forest1"],
+.trello-list[data-color="forest1"],
+.trello-inbox[data-color="forest1"] { background: linear-gradient(145deg, #3f7657 0%, #2d6146 100%); }
+.trello-color-swatch[data-color="forest2"],
+.trello-list[data-color="forest2"],
+.trello-inbox[data-color="forest2"] { background: linear-gradient(145deg, #316448 0%, #234f39 100%); }
+.trello-color-swatch[data-color="forest3"],
+.trello-list[data-color="forest3"],
+.trello-inbox[data-color="forest3"] { background: linear-gradient(145deg, #27543b 0%, #183d2b 100%); }
+
+.trello-color-swatch[data-color="olive1"],
+.trello-list[data-color="olive1"],
+.trello-inbox[data-color="olive1"] { background: linear-gradient(145deg, #777643 0%, #5f6033 100%); }
+.trello-color-swatch[data-color="olive2"],
+.trello-list[data-color="olive2"],
+.trello-inbox[data-color="olive2"] { background: linear-gradient(145deg, #666536 0%, #505126 100%); }
+.trello-color-swatch[data-color="olive3"],
+.trello-list[data-color="olive3"],
+.trello-inbox[data-color="olive3"] { background: linear-gradient(145deg, #55552d 0%, #3f421f 100%); }
+
+.trello-color-swatch[data-color="rust1"],
+.trello-list[data-color="rust1"],
+.trello-inbox[data-color="rust1"] { background: linear-gradient(145deg, #a15b43 0%, #844735 100%); }
+.trello-color-swatch[data-color="rust2"],
+.trello-list[data-color="rust2"],
+.trello-inbox[data-color="rust2"] { background: linear-gradient(145deg, #8b4a36 0%, #713929 100%); }
+.trello-color-swatch[data-color="rust3"],
+.trello-list[data-color="rust3"],
+.trello-inbox[data-color="rust3"] { background: linear-gradient(145deg, #773c2d 0%, #5c2c21 100%); }
+
+.trello-color-swatch[data-color="wine1"],
+.trello-list[data-color="wine1"],
+.trello-inbox[data-color="wine1"] { background: linear-gradient(145deg, #8d4868 0%, #743653 100%); }
+.trello-color-swatch[data-color="wine2"],
+.trello-list[data-color="wine2"],
+.trello-inbox[data-color="wine2"] { background: linear-gradient(145deg, #783953 0%, #612a43 100%); }
+.trello-color-swatch[data-color="wine3"],
+.trello-list[data-color="wine3"],
+.trello-inbox[data-color="wine3"] { background: linear-gradient(145deg, #672f48 0%, #4d2036 100%); }
+
+.trello-color-swatch[data-color="plumd1"],
+.trello-list[data-color="plumd1"],
+.trello-inbox[data-color="plumd1"] { background: linear-gradient(145deg, #77528a 0%, #624171 100%); }
+.trello-color-swatch[data-color="plumd2"],
+.trello-list[data-color="plumd2"],
+.trello-inbox[data-color="plumd2"] { background: linear-gradient(145deg, #634474 0%, #4f345e 100%); }
+.trello-color-swatch[data-color="plumd3"],
+.trello-list[data-color="plumd3"],
+.trello-inbox[data-color="plumd3"] { background: linear-gradient(145deg, #533861 0%, #3d2948 100%); }
+
+.trello-color-swatch[data-color="indigo1"],
+.trello-list[data-color="indigo1"],
+.trello-inbox[data-color="indigo1"] { background: linear-gradient(145deg, #58679a 0%, #455482 100%); }
+.trello-color-swatch[data-color="indigo2"],
+.trello-list[data-color="indigo2"],
+.trello-inbox[data-color="indigo2"] { background: linear-gradient(145deg, #485887 0%, #37456f 100%); }
+.trello-color-swatch[data-color="indigo3"],
+.trello-list[data-color="indigo3"],
+.trello-inbox[data-color="indigo3"] { background: linear-gradient(145deg, #3b4975 0%, #293559 100%); }
+
+.trello-color-swatch[data-color="char1"],
+.trello-list[data-color="char1"],
+.trello-inbox[data-color="char1"] { background: linear-gradient(145deg, #596371 0%, #48515e 100%); }
+.trello-color-swatch[data-color="char2"],
+.trello-list[data-color="char2"],
+.trello-inbox[data-color="char2"] { background: linear-gradient(145deg, #49525f 0%, #39414d 100%); }
+.trello-color-swatch[data-color="char3"],
+.trello-list[data-color="char3"],
+.trello-inbox[data-color="char3"] { background: linear-gradient(145deg, #3b424c 0%, #2a3038 100%); }
+
+.trello-list:is(
+  [data-color^="navy"], [data-color^="ocean"], [data-color^="teald"],
+  [data-color^="forest"], [data-color^="olive"], [data-color^="rust"],
+  [data-color^="wine"], [data-color^="plumd"], [data-color^="indigo"],
+  [data-color^="char"]
+),
+.trello-inbox:is(
+  [data-color^="navy"], [data-color^="ocean"], [data-color^="teald"],
+  [data-color^="forest"], [data-color^="olive"], [data-color^="rust"],
+  [data-color^="wine"], [data-color^="plumd"], [data-color^="indigo"],
+  [data-color^="char"]
+) {
+  --list-text: #ffffff;
+  --list-text-muted: rgba(255,255,255,.80);
+  --list-hover: rgba(255,255,255,.12);
+  color: #ffffff;
+}
+.trello-list:is(
+  [data-color^="navy"], [data-color^="ocean"], [data-color^="teald"],
+  [data-color^="forest"], [data-color^="olive"], [data-color^="rust"],
+  [data-color^="wine"], [data-color^="plumd"], [data-color^="indigo"],
+  [data-color^="char"]
+) .trello-list__header h2,
+.trello-inbox:is(
+  [data-color^="navy"], [data-color^="ocean"], [data-color^="teald"],
+  [data-color^="forest"], [data-color^="olive"], [data-color^="rust"],
+  [data-color^="wine"], [data-color^="plumd"], [data-color^="indigo"],
+  [data-color^="char"]
+) > header {
+  color: var(--list-text);
+}
+.trello-list:is(
+  [data-color^="navy"], [data-color^="ocean"], [data-color^="teald"],
+  [data-color^="forest"], [data-color^="olive"], [data-color^="rust"],
+  [data-color^="wine"], [data-color^="plumd"], [data-color^="indigo"],
+  [data-color^="char"]
+) .trello-list__header-actions > span,
+.trello-list:is(
+  [data-color^="navy"], [data-color^="ocean"], [data-color^="teald"],
+  [data-color^="forest"], [data-color^="olive"], [data-color^="rust"],
+  [data-color^="wine"], [data-color^="plumd"], [data-color^="indigo"],
+  [data-color^="char"]
+) .trello-list__empty {
+  color: var(--list-text-muted);
+}
+.trello-list:is(
+  [data-color^="navy"], [data-color^="ocean"], [data-color^="teald"],
+  [data-color^="forest"], [data-color^="olive"], [data-color^="rust"],
+  [data-color^="wine"], [data-color^="plumd"], [data-color^="indigo"],
+  [data-color^="char"]
+) .trello-list-menu-button,
+.trello-list:is(
+  [data-color^="navy"], [data-color^="ocean"], [data-color^="teald"],
+  [data-color^="forest"], [data-color^="olive"], [data-color^="rust"],
+  [data-color^="wine"], [data-color^="plumd"], [data-color^="indigo"],
+  [data-color^="char"]
+) .trello-add-card {
+  color: var(--list-text);
+}
+
+/* Viewport-aware list actions menu: portal-rendered so board/sidebar overflow cannot clip it. */
+.trello-list-menu--floating {
+  position: fixed;
+  right: auto;
+  z-index: 1000;
+  width: min(286px, calc(100vw - 16px));
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Inline board-title editing for site admins. */
+.trello-board-title-display {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.trello-board-title-display h1 {
+  max-width: min(42vw, 560px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trello-board-title-display__editable {
+  cursor: text;
+}
+.trello-board-title-edit {
+  opacity: .68;
+  font-size: .78rem;
+}
+.trello-board-title-display:hover .trello-board-title-edit,
+.trello-board-title-edit:focus-visible {
+  opacity: 1;
+  background: rgba(255,255,255,.12);
+}
+.trello-board-title-form {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 220px;
+  max-width: min(54vw, 650px);
+}
+.trello-board-title-form input {
+  width: clamp(180px, 28vw, 460px);
+  height: 32px;
+  padding: 5px 9px;
+  border: 2px solid #579dff;
+  border-radius: 5px;
+  outline: 0;
+  background: #fff;
+  color: #172b4d;
+  font: inherit;
+  font-size: .95rem;
+  font-weight: 700;
+}
+.trello-board-title-form .trello-board-title-save,
+.trello-board-title-form .trello-board-title-cancel {
+  width: 30px;
+  height: 30px;
+}
+.trello-board-title-save {
+  background: #579dff !important;
+  color: #0d1b2a !important;
+}
+.trello-board-title-cancel {
+  background: rgba(255,255,255,.08) !important;
+}
+.trello-board-title-error {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  z-index: 20;
+  max-width: 430px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  background: #ae2e24;
+  color: #fff;
+  font-size: .72rem;
+  white-space: normal;
+  box-shadow: 0 6px 18px rgba(0,0,0,.28);
+}
+
+/* Private board membership controls */
+.trello-board-members-button,
+.trello-board-add-user {
+  width: auto !important;
+  min-width: 0;
+  padding: 0 10px !important;
+  font-size: .76rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.trello-board-members-button {
+  background: rgba(255,255,255,.82) !important;
+  color: #172b4d !important;
+}
+.trello-board-add-user {
+  background: rgba(87,157,255,.96) !important;
+  color: #10243c !important;
+}
+.trello-members-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  padding: 92px 18px 18px;
+  background: rgba(9, 12, 16, .28);
+  backdrop-filter: blur(1px);
+}
+.trello-members-panel {
+  width: min(460px, calc(100vw - 24px));
+  max-height: calc(100vh - 110px);
+  overflow: auto;
+  border: 1px solid #454950;
+  border-radius: 12px;
+  background: #282a2d;
+  color: #f4f5f7;
+  box-shadow: 0 20px 52px rgba(0,0,0,.44);
+}
+.trello-members-panel__header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #454950;
+  background: #282a2d;
+}
+.trello-members-panel__header > div {
+  display: grid;
+  gap: 3px;
+}
+.trello-members-panel__header strong {
+  font-size: 1rem;
+}
+.trello-members-panel__header span {
+  color: #b6bac1;
+  font-size: .75rem;
+}
+.trello-members-panel__header button {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #f4f5f7;
+  cursor: pointer;
+}
+.trello-members-panel__header button:hover {
+  background: #3b3d42;
+}
+.trello-members-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px auto;
+  gap: 8px;
+  align-items: end;
+  padding: 14px 16px;
+  border-bottom: 1px solid #3d4045;
+}
+.trello-members-add label {
+  display: grid;
+  gap: 5px;
+  color: #b6bac1;
+  font-size: .7rem;
+  font-weight: 700;
+}
+.trello-members-add input,
+.trello-members-add select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  border: 1px solid #565a61;
+  border-radius: 6px;
+  background: #1f2023;
+  color: #f4f5f7;
+  padding: 6px 8px;
+}
+.trello-members-add input:focus,
+.trello-members-add select:focus {
+  outline: 2px solid #579dff;
+  outline-offset: 1px;
+}
+.trello-members-add__button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 11px;
+  background: #579dff;
+  color: #10243c;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.trello-members-add__button:disabled {
+  opacity: .55;
+  cursor: default;
+}
+.trello-members-error {
+  margin: 10px 16px 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(174,46,36,.28);
+  border: 1px solid rgba(239,117,100,.48);
+  color: #ffd8d3;
+  font-size: .75rem;
+}
+.trello-members-list {
+  display: grid;
+  padding: 8px;
+}
+.trello-member-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 54px;
+  padding: 8px;
+  border-radius: 8px;
+}
+.trello-member-row:hover {
+  background: #323438;
+}
+.trello-member-avatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #0c66e4;
+  color: #fff;
+  font-size: .7rem;
+  font-weight: 800;
+}
+.trello-member-row__identity {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.trello-member-row__identity strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .82rem;
+}
+.trello-member-row__identity span {
+  color: #b6bac1;
+  font-size: .7rem;
+}
+.trello-member-row__actions {
+  display: flex;
+  gap: 5px;
+}
+.trello-member-row__actions button {
+  min-height: 30px;
+  border: 0;
+  border-radius: 5px;
+  padding: 0 8px;
+  background: #3b3d42;
+  color: #f4f5f7;
+  font-size: .68rem;
+  cursor: pointer;
+}
+.trello-member-row__actions button:hover:not(:disabled) {
+  background: #4a4d53;
+}
+.trello-member-row__actions .trello-member-remove {
+  background: rgba(174,46,36,.34);
+  color: #ffd8d3;
+}
+.trello-members-note {
+  margin: 0;
+  padding: 12px 16px 16px;
+  color: #b6bac1;
+  font-size: .74rem;
+}
+@media (max-width: 700px) {
+  .trello-members-overlay {
+    align-items: flex-start;
+    padding: 58px 8px 8px;
+  }
+  .trello-members-panel {
+    width: 100%;
+    max-height: calc(100vh - 66px);
+  }
+  .trello-members-add {
+    grid-template-columns: 1fr;
+  }
+  .trello-member-row {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+  .trello-member-row__actions {
+    grid-column: 2;
+    flex-wrap: wrap;
+  }
+  .trello-board-add-user {
+    display: none !important;
+  }
 }

@@ -172,6 +172,25 @@ export async function createBoard(name: string, managerUserIds: string[] = []): 
   );
 }
 
+export async function renameBoard(
+  boardId: string,
+  name: string,
+  expectedBoardRevision: number,
+): Promise<BoardSummary & { board_revision: number }> {
+  return request(
+    `/api/v1/boards/${encodeURIComponent(boardId)}/rename`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name,
+        expected_board_revision: expectedBoardRevision,
+        reason: "Renamed from board header",
+      }),
+    },
+    { idempotentMutation: true },
+  );
+}
+
 export async function deleteBoard(
   boardId: string,
   confirmName: string,
@@ -208,6 +227,8 @@ export async function commandBoardColumn(
     | "delete"
     | "set_color"
     | "clear_color"
+    | "set_text_color"
+    | "clear_text_color"
     | "archive"
     | "archive_all_cards",
   payload: Record<string, unknown>,

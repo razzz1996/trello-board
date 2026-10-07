@@ -12,6 +12,7 @@ from boards.api import (
     BoardListCreateView,
     BoardMembershipCollectionView,
     BoardMembershipCommandView,
+    BoardRenameView,
     BoardSnapshotView,
 )
 from django.urls import path
@@ -42,6 +43,11 @@ urlpatterns = [
         "boards/<uuid:board_id>/snapshot",
         BoardSnapshotView.as_view(),
         name="board-snapshot",
+    ),
+    path(
+        "boards/<uuid:board_id>/rename",
+        BoardRenameView.as_view(),
+        name="board-rename",
     ),
     path(
         "boards/<uuid:board_id>/columns",

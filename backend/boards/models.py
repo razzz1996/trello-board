@@ -37,6 +37,7 @@ class BoardColumn(models.Model):
     position = models.PositiveSmallIntegerField()
     is_custom = models.BooleanField(default=False)
     color = models.CharField(max_length=16, blank=True, default="")
+    text_color = models.CharField(max_length=16, blank=True, default="")
     is_archived = models.BooleanField(default=False)
     archived_at = models.DateTimeField(null=True, blank=True)
 

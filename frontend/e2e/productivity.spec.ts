@@ -419,16 +419,37 @@ test("custom list UI: color, archive cards, archive list", async ({ page }) => {
   await expect(customList).toBeVisible();
 
   await customList.getByRole("button", { name: `List actions for ${listName}` }).click();
+  await expect(page.locator(".trello-list-menu--floating")).toHaveCount(1);
+  const menuBounds = await page.locator(".trello-list-menu--floating").boundingBox();
+  expect(menuBounds).not.toBeNull();
+  expect(menuBounds!.x).toBeGreaterThanOrEqual(0);
+  expect(menuBounds!.y).toBeGreaterThanOrEqual(0);
+  expect(menuBounds!.x + menuBounds!.width).toBeLessThanOrEqual(1920);
+  expect(menuBounds!.y + menuBounds!.height).toBeLessThanOrEqual(1080);
+
+  const todoList = page
+    .locator(".trello-list")
+    .filter({ has: page.getByRole("heading", { name: "To Do", exact: true }) });
+  await todoList.getByRole("button", { name: "List actions for To Do" }).click();
+  await expect(page.locator(".trello-list-menu--floating")).toHaveCount(1);
+  await expect(customList.getByRole("button", { name: `List actions for ${listName}` })).toBeVisible();
+
+  await customList.getByRole("button", { name: `List actions for ${listName}` }).click();
   await expect(page.getByRole("button", { name: "Rename list" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Delete list" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Purple" }).click();
-  await expect(customList).toHaveAttribute("data-color", "purple");
+  await page.getByRole("button", { name: "Navy deep" }).click();
+  await expect(customList).toHaveAttribute("data-color", "navy2");
+
+  await page.getByRole("button", { name: "Change text color" }).click();
+  await page.getByRole("button", { name: "White text" }).click();
+  await expect(customList).toHaveAttribute("data-text-color", "white");
 
   await page.reload();
   customList = page
     .locator(".trello-list")
     .filter({ has: page.getByRole("heading", { name: listName, exact: true }) });
-  await expect(customList).toHaveAttribute("data-color", "purple");
+  await expect(customList).toHaveAttribute("data-color", "navy2");
+  await expect(customList).toHaveAttribute("data-text-color", "white");
 
   await customList.getByRole("button", { name: "Add a card" }).click();
   await page.getByLabel(`Add a card to ${listName}`).fill(cardTitle);
@@ -445,6 +466,72 @@ test("custom list UI: color, archive cards, archive list", async ({ page }) => {
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Archive this list" }).click();
   await expect(page.getByRole("heading", { name: listName, exact: true })).toHaveCount(0);
+
+  assertClean();
+});
+
+
+test("admin can rename board inline and the name persists", async ({ page }) => {
+  await login(page, env("E2E_ADMIN_USERNAME"));
+  await openBoard(page);
+  const assertClean = monitor(page);
+
+  const originalName = boardName();
+  const renamed = `${originalName} Renamed ${Date.now()}`;
+
+  await page.getByRole("button", { name: "Edit board name" }).click();
+  await page.getByRole("textbox", { name: "Board name", exact: true }).fill(renamed);
+  await page.getByRole("button", { name: "Save board name" }).click();
+  await expect(page.getByRole("heading", { name: renamed, exact: true })).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole("heading", { name: renamed, exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Edit board name" }).click();
+  await page.getByRole("textbox", { name: "Board name", exact: true }).fill(originalName);
+  await page.getByRole("button", { name: "Save board name" }).click();
+  await expect(page.getByRole("heading", { name: originalName, exact: true })).toBeVisible();
+
+  assertClean();
+});
+
+
+test("card detail modal keeps dark readable text on its light background", async ({ page }) => {
+  await login(page, env("E2E_MEMBER_USERNAME"));
+  await openBoard(page);
+  const assertClean = monitor(page);
+
+  const title = `Modal contrast ${Date.now()}`;
+  await addCard(page, title);
+  await card(page, title).getByRole("button").click();
+
+  const modal = page.getByRole("dialog", { name: title });
+  await expect(modal).toBeVisible();
+
+  const modalColors = await modal.evaluate((element) => {
+    const root = getComputedStyle(element);
+    const heading = element.querySelector("h2");
+    const value = element.querySelector(".detail-grid dd");
+    const sectionHeading = Array.from(element.querySelectorAll("h3"))
+      .find((node) => node.textContent?.includes("Card details"));
+    return {
+      background: root.backgroundColor,
+      color: root.color,
+      headingColor: heading ? getComputedStyle(heading).color : "",
+      valueColor: value ? getComputedStyle(value).color : "",
+      sectionHeadingColor: sectionHeading ? getComputedStyle(sectionHeading).color : "",
+    };
+  });
+
+  expect(modalColors.background).toBe("rgb(255, 255, 255)");
+  expect(modalColors.color).toBe("rgb(23, 32, 51)");
+  expect(modalColors.headingColor).toBe("rgb(23, 32, 51)");
+  expect(modalColors.valueColor).toBe("rgb(23, 32, 51)");
+  expect(modalColors.sectionHeadingColor).toBe("rgb(23, 32, 51)");
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Delete card" }).click();
+  await expect(card(page, title)).toHaveCount(0);
 
   assertClean();
 });

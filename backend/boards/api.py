@@ -30,17 +30,32 @@ STANDARD_COLUMNS = [
     (BoardColumn.State.DONE, "Done"),
 ]
 LIST_COLORS = {
-    "green",
-    "yellow",
-    "orange",
-    "red",
-    "purple",
-    "blue",
-    "teal",
-    "lime",
-    "pink",
-    "gray",
+    # Legacy solid colors kept for existing boards.
+    "green", "yellow", "orange", "red", "purple", "blue", "teal", "lime", "pink", "gray",
+    # Pastel gradient palette: three variations per family.
+    "rose-1", "rose-2", "rose-3",
+    "peach-1", "peach-2", "peach-3",
+    "amber-1", "amber-2", "amber-3",
+    "mint-1", "mint-2", "mint-3",
+    "aqua-1", "aqua-2", "aqua-3",
+    "sky-1", "sky-2", "sky-3",
+    "lavender-1", "lavender-2", "lavender-3",
+    "lilac-1", "lilac-2", "lilac-3",
+    "blush-1", "blush-2", "blush-3",
+    "slate-1", "slate-2", "slate-3",
+    # Dark and rich gradient palette: white-text friendly choices.
+    "navy1", "navy2", "navy3",
+    "ocean1", "ocean2", "ocean3",
+    "teald1", "teald2", "teald3",
+    "forest1", "forest2", "forest3",
+    "olive1", "olive2", "olive3",
+    "rust1", "rust2", "rust3",
+    "wine1", "wine2", "wine3",
+    "plumd1", "plumd2", "plumd3",
+    "indigo1", "indigo2", "indigo3",
+    "char1", "char2", "char3",
 }
+LIST_TEXT_COLORS = {"ink", "charcoal", "navy", "plum", "forest", "white"}
 
 
 def _board_summary(board: Board) -> dict:
@@ -60,6 +75,7 @@ def _column_payload(column: BoardColumn) -> dict[str, object]:
         "position": column.position,
         "is_custom": column.is_custom,
         "color": column.color,
+        "text_color": column.text_color,
         "is_archived": column.is_archived,
         "archived_at": column.archived_at.isoformat() if column.archived_at else None,
     }
@@ -206,26 +222,21 @@ class BoardListCreateView(APIView):
                 },
                 status=400,
             )
-        users = list(User.objects.filter(is_active=True).order_by("username"))
-
         def create():
             board = Board.objects.create(name=name, created_by=request.user)
             for index, (state, label) in enumerate(STANDARD_COLUMNS):
                 BoardColumn.objects.create(board=board, state=state, name=label, position=index)
+
             manager_user_ids: list[str] = []
-            for user in users:
-                is_manager = (
-                    user.is_staff or user.is_superuser or str(user.id) in requested_manager_ids
-                )
-                role = BoardMembership.Role.MANAGER if is_manager else BoardMembership.Role.MEMBER
+            for user in requested_managers:
                 BoardMembership.objects.create(
                     board=board,
                     user=user,
-                    role=role,
+                    role=BoardMembership.Role.MANAGER,
                     created_by=request.user,
                 )
-                if is_manager:
-                    manager_user_ids.append(str(user.id))
+                manager_user_ids.append(str(user.id))
+
             AuditEvent.objects.create(
                 board=board,
                 board_revision=board.revision,
@@ -238,7 +249,8 @@ class BoardListCreateView(APIView):
                     "board_id": str(board.id),
                     "name": board.name,
                     "manager_user_ids": manager_user_ids,
-                    "member_count": len(users),
+                    "member_count": len(requested_managers),
+                    "access": "members_only",
                 },
             )
             return 201, _board_summary(board)
@@ -254,6 +266,77 @@ class BoardListCreateView(APIView):
         except IdempotencyError as exc:
             return _idempotency_error(exc)
         return Response(result.body, status=result.status)
+
+
+class BoardRenameView(APIView):
+    def post(self, request, board_id):
+        require_site_admin(request.user)
+        payload = request.data if isinstance(request.data, dict) else {}
+        name = str(payload.get("name", "")).strip()
+
+        if not name or len(name) > 200:
+            return _board_admin_error(
+                BoardAdminError("invalid_name", "Board name must be between 1 and 200 characters.", 400)
+            )
+        try:
+            expected_revision = int(payload["expected_board_revision"])
+        except (KeyError, TypeError, ValueError):
+            return _board_admin_error(
+                BoardAdminError(
+                    "revision_required",
+                    "expected_board_revision is required.",
+                    400,
+                )
+            )
+
+        def execute():
+            with transaction.atomic():
+                board = Board.objects.select_for_update().filter(pk=board_id).first()
+                if board is None:
+                    raise BoardAdminError("not_found", "Board not found.", 404)
+                if board.revision != expected_revision:
+                    raise BoardAdminError(
+                        "revision_conflict",
+                        "The board changed before the rename could be saved. Reload and try again.",
+                        409,
+                    )
+
+                old_name = board.name
+                if old_name == name:
+                    return 200, {**_board_summary(board), "board_revision": board.revision}
+
+                before = {"board_id": str(board.id), "name": old_name}
+                board.name = name
+                board.revision += 1
+                board.save(update_fields=["name", "revision", "updated_at"])
+                after = {"board_id": str(board.id), "name": name}
+
+                AuditEvent.objects.create(
+                    board=board,
+                    board_revision=board.revision,
+                    task=None,
+                    actor=request.user,
+                    action="rename_board",
+                    reason=str(payload.get("reason", ""))[:2000],
+                    before=before,
+                    after=after,
+                )
+                return 200, {**_board_summary(board), "board_revision": board.revision}
+
+        try:
+            result = run_idempotent(
+                actor=request.user,
+                endpoint=f"/api/v1/boards/{board_id}/rename",
+                key=request.headers.get("Idempotency-Key"),
+                payload=dict(payload),
+                handler=execute,
+                authorize_replay=lambda: require_site_admin(request.user),
+            )
+            return Response(result.body, status=result.status)
+        except BoardAdminError as exc:
+            return _board_admin_error(exc)
+        except IdempotencyError as exc:
+            return _idempotency_error(exc)
 
 
 class BoardSnapshotView(APIView):
@@ -319,6 +402,7 @@ class BoardSnapshotView(APIView):
                             "position": column.position,
                             "is_custom": column.is_custom,
                             "color": column.color,
+                            "text_color": column.text_color,
                             "is_archived": column.is_archived,
                             "archived_at": (
                                 column.archived_at.isoformat() if column.archived_at else None
@@ -408,6 +492,8 @@ class BoardColumnCommandView(APIView):
         "delete",
         "set_color",
         "clear_color",
+        "set_text_color",
+        "clear_text_color",
         "archive",
         "archive_all_cards",
     }
@@ -510,6 +596,25 @@ class BoardColumnCommandView(APIView):
                     column.save(update_fields=["color"])
                     response_body = _column_payload(column)
                     action = "clear_list_color"
+
+                elif command == "set_text_color":
+                    text_color = str(payload.get("text_color", "")).strip().lower()
+                    if text_color not in LIST_TEXT_COLORS:
+                        raise BoardAdminError(
+                            "invalid_text_color",
+                            "Choose one of the available list text colors.",
+                            400,
+                        )
+                    column.text_color = text_color
+                    column.save(update_fields=["text_color"])
+                    response_body = _column_payload(column)
+                    action = "set_list_text_color"
+
+                elif command == "clear_text_color":
+                    column.text_color = ""
+                    column.save(update_fields=["text_color"])
+                    response_body = _column_payload(column)
+                    action = "clear_list_text_color"
 
                 elif command == "archive":
                     if not column.is_custom:

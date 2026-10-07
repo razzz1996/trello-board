@@ -19,10 +19,12 @@ import {
   type FormEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   Link,
   Navigate,
@@ -33,16 +35,20 @@ import {
 
 import {
   ApiError,
+  addBoardMembershipByUsername,
   commandBoardColumn,
+  commandBoardMembership,
   commandTask,
   createBoardColumn,
   createTask,
   getBoardSnapshot,
+  renameBoard,
 } from "./api";
 import { TaskDetailModal } from "./TaskActions";
 import type {
   BoardColumn,
   BoardSnapshot,
+  Role,
   SessionUser,
   Task,
 } from "./types";
@@ -195,17 +201,40 @@ function InlineAddCard({
     </form>
   );
 }
-const LIST_COLOR_OPTIONS = [
-  { key: "green", label: "Green" },
-  { key: "yellow", label: "Yellow" },
-  { key: "orange", label: "Orange" },
-  { key: "red", label: "Red" },
-  { key: "purple", label: "Purple" },
-  { key: "blue", label: "Blue" },
-  { key: "teal", label: "Teal" },
-  { key: "lime", label: "Lime" },
-  { key: "pink", label: "Pink" },
-  { key: "gray", label: "Gray" },
+const PASTEL_COLOR_OPTIONS = [
+  { key: "rose-1", label: "Rose light" }, { key: "rose-2", label: "Rose medium" }, { key: "rose-3", label: "Rose deep" },
+  { key: "peach-1", label: "Peach light" }, { key: "peach-2", label: "Peach medium" }, { key: "peach-3", label: "Peach deep" },
+  { key: "amber-1", label: "Butter light" }, { key: "amber-2", label: "Butter medium" }, { key: "amber-3", label: "Butter deep" },
+  { key: "mint-1", label: "Mint light" }, { key: "mint-2", label: "Mint medium" }, { key: "mint-3", label: "Mint deep" },
+  { key: "aqua-1", label: "Aqua light" }, { key: "aqua-2", label: "Aqua medium" }, { key: "aqua-3", label: "Aqua deep" },
+  { key: "sky-1", label: "Sky light" }, { key: "sky-2", label: "Sky medium" }, { key: "sky-3", label: "Sky deep" },
+  { key: "lavender-1", label: "Lavender light" }, { key: "lavender-2", label: "Lavender medium" }, { key: "lavender-3", label: "Lavender deep" },
+  { key: "lilac-1", label: "Lilac light" }, { key: "lilac-2", label: "Lilac medium" }, { key: "lilac-3", label: "Lilac deep" },
+  { key: "blush-1", label: "Blush light" }, { key: "blush-2", label: "Blush medium" }, { key: "blush-3", label: "Blush deep" },
+  { key: "slate-1", label: "Cloud light" }, { key: "slate-2", label: "Cloud medium" }, { key: "slate-3", label: "Cloud deep" },
+] as const;
+
+const DARK_COLOR_OPTIONS = [
+  { key: "navy1", label: "Navy rich" }, { key: "navy2", label: "Navy deep" }, { key: "navy3", label: "Midnight navy" },
+  { key: "ocean1", label: "Ocean rich" }, { key: "ocean2", label: "Ocean deep" }, { key: "ocean3", label: "Deep sea" },
+  { key: "teald1", label: "Teal rich" }, { key: "teald2", label: "Teal deep" }, { key: "teald3", label: "Dark teal" },
+  { key: "forest1", label: "Forest rich" }, { key: "forest2", label: "Forest deep" }, { key: "forest3", label: "Pine" },
+  { key: "olive1", label: "Olive rich" }, { key: "olive2", label: "Olive deep" }, { key: "olive3", label: "Moss" },
+  { key: "rust1", label: "Rust rich" }, { key: "rust2", label: "Rust deep" }, { key: "rust3", label: "Burnt sienna" },
+  { key: "wine1", label: "Wine rich" }, { key: "wine2", label: "Wine deep" }, { key: "wine3", label: "Burgundy" },
+  { key: "plumd1", label: "Plum rich" }, { key: "plumd2", label: "Plum deep" }, { key: "plumd3", label: "Aubergine" },
+  { key: "indigo1", label: "Indigo rich" }, { key: "indigo2", label: "Indigo deep" }, { key: "indigo3", label: "Night violet" },
+  { key: "char1", label: "Charcoal soft" }, { key: "char2", label: "Charcoal deep" }, { key: "char3", label: "Graphite" },
+] as const;
+
+const LIST_TEXT_COLOR_OPTIONS = [
+  { key: "", label: "Auto", sample: "Aa" },
+  { key: "ink", label: "Ink", sample: "Aa" },
+  { key: "charcoal", label: "Charcoal", sample: "Aa" },
+  { key: "navy", label: "Navy", sample: "Aa" },
+  { key: "plum", label: "Plum", sample: "Aa" },
+  { key: "forest", label: "Forest", sample: "Aa" },
+  { key: "white", label: "White", sample: "Aa" },
 ] as const;
 
 function ColumnMenu({
@@ -219,11 +248,81 @@ function ColumnMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [colorOpen, setColorOpen] = useState(true);
+  const [textColorOpen, setTextColorOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ left: number; top: number; maxHeight: number } | null>(null);
+
+  useEffect(() => {
+    const handleOtherMenu = (event: Event) => {
+      const detail = (event as CustomEvent<{ columnId: string }>).detail;
+      if (detail?.columnId && detail.columnId !== column.id) {
+        setOpen(false);
+      }
+    };
+    window.addEventListener("trello:list-menu-open", handleOtherMenu as EventListener);
+    return () => window.removeEventListener("trello:list-menu-open", handleOtherMenu as EventListener);
+  }, [column.id]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (buttonRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setMenuPosition(null);
+      return;
+    }
+
+    const reposition = () => {
+      const button = buttonRef.current;
+      const menu = menuRef.current;
+      if (!button || !menu) return;
+
+      const margin = 8;
+      const gap = 6;
+      const buttonRect = button.getBoundingClientRect();
+      const menuRect = menu.getBoundingClientRect();
+      const width = Math.min(menuRect.width || 286, window.innerWidth - margin * 2);
+      const height = menuRect.height;
+
+      let left = buttonRect.right - width;
+      left = Math.max(margin, Math.min(left, window.innerWidth - width - margin));
+
+      const spaceBelow = window.innerHeight - buttonRect.bottom - margin;
+      const spaceAbove = buttonRect.top - margin;
+      const maxHeight = Math.max(220, Math.min(680, Math.max(spaceBelow, spaceAbove)));
+      let top = buttonRect.bottom + gap;
+
+      if (height > spaceBelow && spaceAbove > spaceBelow) {
+        top = Math.max(margin, buttonRect.top - Math.min(height, maxHeight) - gap);
+      }
+      top = Math.max(margin, Math.min(top, window.innerHeight - Math.min(height, maxHeight) - margin));
+
+      setMenuPosition({ left, top, maxHeight });
+    };
+
+    reposition();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [open, colorOpen, textColorOpen]);
 
   async function runCommand(
-    command: "set_color" | "clear_color" | "archive" | "archive_all_cards",
+    command: "set_color" | "clear_color" | "set_text_color" | "clear_text_color" | "archive" | "archive_all_cards",
     payload: Record<string, unknown> = {},
   ) {
     setBusy(true);
@@ -271,15 +370,34 @@ function ColumnMenu({
   return (
     <div className="trello-list-menu-wrap">
       <button
+        ref={buttonRef}
         className="trello-list-menu-button"
         type="button"
         aria-label={`List actions for ${column.name}`}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          const next = !open;
+          if (next) {
+            window.dispatchEvent(
+              new CustomEvent("trello:list-menu-open", { detail: { columnId: column.id } }),
+            );
+          }
+          setOpen(next);
+        }}
       >
         •••
       </button>
-      {open && (
-        <div className="trello-list-menu trello-list-menu--actions">
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className="trello-list-menu trello-list-menu--actions trello-list-menu--floating"
+            style={{
+              left: menuPosition?.left ?? 0,
+              top: menuPosition?.top ?? 0,
+              maxHeight: menuPosition?.maxHeight ?? 680,
+              visibility: menuPosition ? "visible" : "hidden",
+            }}
+          >
           <div className="trello-list-menu__title">
             <strong>List actions</strong>
             <button
@@ -302,14 +420,16 @@ function ColumnMenu({
 
           {colorOpen && (
             <div className="trello-list-colors" aria-label="List colors">
-              <div className="trello-list-colors__grid">
-                {LIST_COLOR_OPTIONS.map((option) => (
+              <span className="trello-color-group-label">Pastel</span>
+              <div className="trello-list-colors__grid trello-list-colors__grid--pastel">
+                {PASTEL_COLOR_OPTIONS.map((option) => (
                   <button
                     key={option.key}
                     type="button"
                     className="trello-color-swatch"
                     data-color={option.key}
                     aria-label={option.label}
+                    title={option.label}
                     aria-pressed={column.color === option.key}
                     disabled={busy}
                     onClick={() => void runCommand("set_color", { color: option.key })}
@@ -318,6 +438,26 @@ function ColumnMenu({
                   </button>
                 ))}
               </div>
+
+              <span className="trello-color-group-label">Dark & rich</span>
+              <div className="trello-list-colors__grid trello-list-colors__grid--dark">
+                {DARK_COLOR_OPTIONS.map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    className="trello-color-swatch trello-color-swatch--dark"
+                    data-color={option.key}
+                    aria-label={option.label}
+                    title={option.label}
+                    aria-pressed={column.color === option.key}
+                    disabled={busy}
+                    onClick={() => void runCommand("set_color", { color: option.key })}
+                  >
+                    {column.color === option.key && <span>✓</span>}
+                  </button>
+                ))}
+              </div>
+
               <button
                 className="trello-remove-color"
                 type="button"
@@ -326,6 +466,41 @@ function ColumnMenu({
               >
                 × Remove color
               </button>
+            </div>
+          )}
+
+          <button
+            className="trello-list-menu__section-toggle"
+            type="button"
+            onClick={() => setTextColorOpen((value) => !value)}
+          >
+            <span>Change text color</span>
+            <span aria-hidden="true">{textColorOpen ? "⌃" : "⌄"}</span>
+          </button>
+
+          {textColorOpen && (
+            <div className="trello-text-colors" aria-label="List text colors">
+              {LIST_TEXT_COLOR_OPTIONS.map((option) => (
+                <button
+                  key={option.key || "auto"}
+                  type="button"
+                  className="trello-text-color-swatch"
+                  data-text-color={option.key || "auto"}
+                  aria-label={`${option.label} text`}
+                  aria-pressed={column.text_color === option.key}
+                  disabled={busy}
+                  onClick={() =>
+                    void runCommand(
+                      option.key ? "set_text_color" : "clear_text_color",
+                      option.key ? { text_color: option.key } : {},
+                    )
+                  }
+                >
+                  <span className="trello-text-color-swatch__sample">{option.sample}</span>
+                  <span>{option.label}</span>
+                  {column.text_color === option.key && <strong>✓</strong>}
+                </button>
+              ))}
             </div>
           )}
 
@@ -360,8 +535,9 @@ function ColumnMenu({
           </button>
 
           {error && <span className="trello-inline-error">{error}</span>}
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -404,6 +580,7 @@ function ColumnView({
         data-column-id={column.id}
         data-tone={tone}
         data-color={column.color || undefined}
+        data-text-color={column.text_color || undefined}
       >
         <header className="trello-list__header">
           <h2>{column.name}</h2>
@@ -456,6 +633,7 @@ function InboxRail({
       className={`trello-inbox ${isOver ? "trello-inbox--over" : ""}`}
       data-state={column.state}
       data-color={column.color || undefined}
+      data-text-color={column.text_color || undefined}
     >
       <header>
         <div><span aria-hidden="true">▣</span><h2>Inbox</h2></div>
@@ -560,6 +738,319 @@ function AddListControl({
   );
 }
 
+function BoardMembersPanel({
+  snapshot,
+  currentUser,
+  open,
+  startInAddMode,
+  onClose,
+  onChanged,
+}: {
+  snapshot: BoardSnapshot;
+  currentUser: SessionUser;
+  open: boolean;
+  startInAddMode: boolean;
+  onClose: () => void;
+  onChanged: () => Promise<void>;
+}) {
+  const canManage = currentUser.is_admin || snapshot.membership.role === "MANAGER";
+  const [username, setUsername] = useState("");
+  const [role, setRole] = useState<Role>("MEMBER");
+  const [busyUserId, setBusyUserId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState("");
+  const usernameRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setUsername("");
+      setRole("MEMBER");
+      setAdding(false);
+      setBusyUserId(null);
+      setError("");
+      return;
+    }
+    if (startInAddMode && canManage) {
+      window.setTimeout(() => usernameRef.current?.focus(), 0);
+    }
+  }, [canManage, open, startInAddMode]);
+
+  if (!open) return null;
+
+  async function addMember(event: FormEvent) {
+    event.preventDefault();
+    const cleaned = username.trim();
+    if (!canManage || !cleaned || adding) return;
+
+    setAdding(true);
+    setError("");
+    try {
+      await addBoardMembershipByUsername(snapshot.board.id, cleaned, role);
+      setUsername("");
+      setRole("MEMBER");
+      await onChanged();
+      window.setTimeout(() => usernameRef.current?.focus(), 0);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function changeRole(userId: string, currentRole: Role) {
+    if (!canManage || busyUserId) return;
+    setBusyUserId(userId);
+    setError("");
+    try {
+      await commandBoardMembership(snapshot.board.id, userId, "set_role", {
+        role: currentRole === "MANAGER" ? "MEMBER" : "MANAGER",
+        reason: "Role changed from board members panel",
+      });
+      await onChanged();
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusyUserId(null);
+    }
+  }
+
+  async function removeMember(userId: string, usernameToRemove: string) {
+    if (!canManage || busyUserId || userId === currentUser.id) return;
+    if (!window.confirm(`Remove ${usernameToRemove} from this board? They will immediately lose access.`)) {
+      return;
+    }
+
+    setBusyUserId(userId);
+    setError("");
+    try {
+      await commandBoardMembership(snapshot.board.id, userId, "remove", {
+        reason: "Removed from board members panel",
+      });
+      await onChanged();
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusyUserId(null);
+    }
+  }
+
+  return createPortal(
+    <div
+      className="trello-members-overlay"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section className="trello-members-panel" role="dialog" aria-modal="true" aria-label="Board members">
+        <header className="trello-members-panel__header">
+          <div>
+            <strong>Board members</strong>
+            <span>🔒 Private board · {snapshot.members.length} active member{snapshot.members.length === 1 ? "" : "s"}</span>
+          </div>
+          <button type="button" aria-label="Close board members" onClick={onClose}>×</button>
+        </header>
+
+        {canManage && (
+          <form className="trello-members-add" onSubmit={addMember}>
+            <label>
+              Add user
+              <input
+                ref={usernameRef}
+                aria-label="Username to add"
+                value={username}
+                maxLength={150}
+                placeholder="Enter exact username"
+                disabled={adding}
+                onChange={(event) => setUsername(event.target.value)}
+              />
+            </label>
+            <label>
+              Access
+              <select
+                aria-label="Board role"
+                value={role}
+                disabled={adding}
+                onChange={(event) => setRole(event.target.value as Role)}
+              >
+                <option value="MEMBER">Member</option>
+                <option value="MANAGER">Manager</option>
+              </select>
+            </label>
+            <button
+              className="trello-members-add__button"
+              type="submit"
+              disabled={adding || !username.trim()}
+            >
+              {adding ? "Adding…" : "Add to board"}
+            </button>
+          </form>
+        )}
+
+        {error && <div className="trello-members-error">{error}</div>}
+
+        <div className="trello-members-list">
+          {snapshot.members.map((member) => {
+            const isCurrentUser = member.id === currentUser.id;
+            const isBusy = busyUserId === member.id;
+            return (
+              <div className="trello-member-row" key={member.id}>
+                <span className="trello-member-avatar">
+                  {member.username.slice(0, 2).toUpperCase()}
+                </span>
+                <div className="trello-member-row__identity">
+                  <strong>{member.username}{isCurrentUser ? " (you)" : ""}</strong>
+                  <span>{member.role === "MANAGER" ? "Board manager" : "Member"}</span>
+                </div>
+                {canManage && (
+                  <div className="trello-member-row__actions">
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => void changeRole(member.id, member.role)}
+                    >
+                      {member.role === "MANAGER" ? "Make member" : "Make manager"}
+                    </button>
+                    {!isCurrentUser && (
+                      <button
+                        className="trello-member-remove"
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => void removeMember(member.id, member.username)}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {!canManage && (
+          <p className="trello-members-note">
+            Only a board manager or administrator can add or remove board members.
+          </p>
+        )}
+      </section>
+    </div>,
+    document.body,
+  );
+}
+
+function BoardTitleEditor({
+  snapshot,
+  canEdit,
+  onChanged,
+}: {
+  snapshot: BoardSnapshot;
+  canEdit: boolean;
+  onChanged: () => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(snapshot.board.name);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!editing) setName(snapshot.board.name);
+  }, [editing, snapshot.board.name]);
+
+  function cancel() {
+    setName(snapshot.board.name);
+    setError("");
+    setEditing(false);
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const cleaned = name.trim();
+    if (!cleaned || cleaned === snapshot.board.name || busy) {
+      if (cleaned === snapshot.board.name) setEditing(false);
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    try {
+      await renameBoard(snapshot.board.id, cleaned, snapshot.revision);
+      setEditing(false);
+      await onChanged();
+    } catch (caught) {
+      setError(errorMessage(caught));
+      if (caught instanceof ApiError && caught.status === 409) {
+        await onChanged();
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!canEdit || !editing) {
+    return (
+      <div className="trello-board-title-display">
+        <h1
+          className={canEdit ? "trello-board-title-display__editable" : undefined}
+          onDoubleClick={() => canEdit && setEditing(true)}
+          title={canEdit ? "Double-click to rename board" : undefined}
+        >
+          {snapshot.board.name}
+        </h1>
+        {canEdit && (
+          <button
+            type="button"
+            className="trello-board-title-edit"
+            aria-label="Edit board name"
+            title="Edit board name"
+            onClick={() => setEditing(true)}
+          >
+            ✎
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <form className="trello-board-title-form" onSubmit={submit}>
+      <input
+        autoFocus
+        aria-label="Board name"
+        value={name}
+        maxLength={200}
+        disabled={busy}
+        onChange={(event) => setName(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            cancel();
+          }
+        }}
+        onFocus={(event) => event.currentTarget.select()}
+      />
+      <button
+        className="trello-board-title-save"
+        type="submit"
+        aria-label="Save board name"
+        disabled={busy || !name.trim()}
+      >
+        {busy ? "…" : "✓"}
+      </button>
+      <button
+        className="trello-board-title-cancel"
+        type="button"
+        aria-label="Cancel board name edit"
+        disabled={busy}
+        onClick={cancel}
+      >
+        ×
+      </button>
+      {error && <span className="trello-board-title-error">{error}</span>}
+    </form>
+  );
+}
+
 function BoardDock() {
   return (
     <nav className="trello-dock" aria-label="Board shortcuts">
@@ -587,6 +1078,8 @@ export function BoardPage({ user }: { user: SessionUser }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [membersOpen, setMembersOpen] = useState(false);
+  const [memberPanelAddMode, setMemberPanelAddMode] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -619,6 +1112,8 @@ export function BoardPage({ user }: { user: SessionUser }) {
   useEffect(() => {
     snapshotRevision.current = undefined;
     setSnapshot(null);
+    setMembersOpen(false);
+    setMemberPanelAddMode(false);
   }, [boardId]);
 
   useEffect(() => {
@@ -767,13 +1262,40 @@ export function BoardPage({ user }: { user: SessionUser }) {
                 <Link to="/" className="trello-board-toolbar__back" aria-label="Back to boards">
                   ‹
                 </Link>
-                <h1>{snapshot.board.name}</h1>
+                <BoardTitleEditor
+                  snapshot={snapshot}
+                  canEdit={user.is_admin}
+                  onChanged={changed}
+                />
                 <button type="button" aria-label="Board view">▥</button>
                 <button type="button" aria-label="Board menu">⌄</button>
               </div>
               <div className="trello-board-toolbar__actions">
                 <span className="trello-avatar">{user.username.slice(0, 2).toUpperCase()}</span>
-                <span className="trello-shared">👥 Shared with everyone</span>
+                <button
+                  className="trello-shared trello-board-members-button"
+                  type="button"
+                  aria-label="View board members"
+                  onClick={() => {
+                    setMemberPanelAddMode(false);
+                    setMembersOpen(true);
+                  }}
+                >
+                  🔒 {snapshot.members.length} member{snapshot.members.length === 1 ? "" : "s"}
+                </button>
+                {(user.is_admin || snapshot.membership.role === "MANAGER") && (
+                  <button
+                    className="trello-board-add-user"
+                    type="button"
+                    aria-label="Add user to board"
+                    onClick={() => {
+                      setMemberPanelAddMode(true);
+                      setMembersOpen(true);
+                    }}
+                  >
+                    ＋ Add user
+                  </button>
+                )}
                 <button type="button" aria-label="More board actions">•••</button>
               </div>
             </header>
@@ -803,6 +1325,18 @@ export function BoardPage({ user }: { user: SessionUser }) {
       </DndContext>
 
       <BoardDock />
+
+      <BoardMembersPanel
+        snapshot={snapshot}
+        currentUser={user}
+        open={membersOpen}
+        startInAddMode={memberPanelAddMode}
+        onClose={() => {
+          setMembersOpen(false);
+          setMemberPanelAddMode(false);
+        }}
+        onChanged={changed}
+      />
 
       {selected && (
         <TaskDetailModal

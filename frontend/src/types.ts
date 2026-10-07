@@ -159,6 +159,7 @@ export interface BoardColumn {
   position: number;
   is_custom: boolean;
   color: string;
+  text_color: string;
   is_archived: boolean;
   archived_at: string | null;
   tasks: Task[];
