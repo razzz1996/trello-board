@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import urlparse
 
-from boards.models import Board, BoardColumn, BoardMembership
+from boards.models import Board, BoardColumn, BoardLabel, BoardMembership
 from boards.permissions import require_board_manager, require_board_member
 from core.clock import now
 from django.contrib.auth import get_user_model
@@ -1249,5 +1249,87 @@ def resolve_change_proposal(
             "decline_change_proposal",
             reason=reason,
             after={"proposal_id": str(proposal.id)},
+        )
+        return task
+
+
+def set_task_labels(
+    *,
+    actor,
+    task_id,
+    expected_version: int,
+    expected_board_revision: int,
+    label_ids: list[str],
+) -> Task:
+    with transaction.atomic():
+        board, task = _board_and_task_for_update(task_id)
+        require_board_member(actor, board.id, for_update=True)
+        _require_expected(task, board, expected_version, expected_board_revision)
+
+        clean_ids = {str(value) for value in label_ids if str(value).strip()}
+        labels = list(BoardLabel.objects.filter(board=board, id__in=clean_ids))
+        if len(labels) != len(clean_ids):
+            raise DomainError(
+                "invalid_label",
+                "Every selected label must belong to this board.",
+                status=400,
+            )
+        before_ids = [str(value) for value in task.labels.values_list("id", flat=True)]
+        task.labels.set(labels)
+        _bump(board, task)
+        after_ids = [str(label.id) for label in labels]
+        _audit(
+            board,
+            task,
+            actor,
+            "set_task_labels",
+            before={"label_ids": before_ids},
+            after={"label_ids": after_ids},
+        )
+        return task
+
+
+def archive_task(
+    *,
+    actor,
+    task_id,
+    expected_version: int,
+    expected_board_revision: int,
+) -> Task:
+    with transaction.atomic():
+        board, task = _board_and_task_for_update(task_id)
+        require_board_member(actor, board.id, for_update=True)
+        _require_expected(task, board, expected_version, expected_board_revision)
+        before = {
+            **_serialize_task(task),
+            "title": task.title,
+            "is_archived": False,
+        }
+        task.is_archived = True
+        task.archived_at = now()
+        task.recurrence_generation += 1
+        _bump(board, task)
+        task.save(
+            update_fields=[
+                "is_archived",
+                "archived_at",
+                "recurrence_generation",
+                "row_version",
+                "updated_at",
+            ]
+        )
+        _audit(
+            board,
+            task,
+            actor,
+            "archive_task",
+            before=before,
+            after={
+                "task_id": str(task.id),
+                "title": task.title,
+                "is_archived": True,
+                "archived_at": task.archived_at.isoformat(),
+                "row_version": task.row_version,
+            },
         )
         return task

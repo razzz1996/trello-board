@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from boards.models import BoardLabel
 from rest_framework import serializers
 
 from .models import (
@@ -130,6 +131,13 @@ class ChangeProposalSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class TaskLabelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BoardLabel
+        fields = ["id", "color", "name", "description", "position"]
+        read_only_fields = fields
+
+
 class TaskSerializer(serializers.ModelSerializer):
     column_state = serializers.CharField(source="column.state", read_only=True)
     column_name = serializers.CharField(source="column.name", read_only=True)
@@ -140,6 +148,7 @@ class TaskSerializer(serializers.ModelSerializer):
     comments = CommentSerializer(many=True, read_only=True)
     change_proposals = ChangeProposalSerializer(many=True, read_only=True)
     submissions = SubmissionSerializer(many=True, read_only=True)
+    labels = TaskLabelSerializer(many=True, read_only=True)
 
     class Meta:
         model = Task
@@ -173,6 +182,7 @@ class TaskSerializer(serializers.ModelSerializer):
             "comments",
             "change_proposals",
             "submissions",
+            "labels",
             "created_at",
             "updated_at",
         ]

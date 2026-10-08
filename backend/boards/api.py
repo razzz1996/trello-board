@@ -13,7 +13,7 @@ from workitems.models import AuditEvent, Task
 from workitems.serializers import TaskSerializer
 
 from .deletion import BoardDeletionError, delete_board
-from .models import Board, BoardColumn, BoardMembership
+from .models import Board, BoardColumn, BoardLabel, BoardMembership
 from .permissions import (
     require_board_manager_or_site_admin,
     require_board_member,
@@ -56,6 +56,7 @@ LIST_COLORS = {
     "char1", "char2", "char3",
 }
 LIST_TEXT_COLORS = {"ink", "charcoal", "navy", "plum", "forest", "white"}
+DEFAULT_BOARD_LABELS = ["green", "yellow", "orange", "red", "purple", "blue"]
 
 
 def _board_summary(board: Board) -> dict:
@@ -64,6 +65,12 @@ def _board_summary(board: Board) -> dict:
         "name": board.name,
         "revision": board.revision,
         "archived": board.archived,
+        "background_key": board.background_key,
+        "background_image_url": (
+            f"/api/v1/boards/{board.id}/background-image?rev={board.revision}"
+            if board.background_image
+            else None
+        ),
     }
 
 
@@ -226,6 +233,12 @@ class BoardListCreateView(APIView):
             board = Board.objects.create(name=name, created_by=request.user)
             for index, (state, label) in enumerate(STANDARD_COLUMNS):
                 BoardColumn.objects.create(board=board, state=state, name=label, position=index)
+            BoardLabel.objects.bulk_create(
+                [
+                    BoardLabel(board=board, color=color, position=index)
+                    for index, color in enumerate(DEFAULT_BOARD_LABELS)
+                ]
+            )
 
             manager_user_ids: list[str] = []
             for user in requested_managers:
@@ -270,7 +283,7 @@ class BoardListCreateView(APIView):
 
 class BoardRenameView(APIView):
     def post(self, request, board_id):
-        require_site_admin(request.user)
+        require_board_manager_or_site_admin(request.user, board_id)
         payload = request.data if isinstance(request.data, dict) else {}
         name = str(payload.get("name", "")).strip()
 
@@ -330,7 +343,10 @@ class BoardRenameView(APIView):
                 key=request.headers.get("Idempotency-Key"),
                 payload=dict(payload),
                 handler=execute,
-                authorize_replay=lambda: require_site_admin(request.user),
+                authorize_replay=lambda: _authorize_board_manager_or_admin(
+                    request.user,
+                    board_id,
+                ),
             )
             return Response(result.body, status=result.status)
         except BoardAdminError as exc:
@@ -370,6 +386,7 @@ class BoardSnapshotView(APIView):
                     "comments__history",
                     "change_proposals",
                     "submissions__review",
+                    "labels",
                 )
                 .order_by("column__position", "position", "id")
             )
@@ -392,6 +409,16 @@ class BoardSnapshotView(APIView):
                             "role": item.role,
                         }
                         for item in roster
+                    ],
+                    "labels": [
+                        {
+                            "id": str(label.id),
+                            "color": label.color,
+                            "name": label.name,
+                            "description": label.description,
+                            "position": label.position,
+                        }
+                        for label in board.labels.order_by("position", "created_at")
                     ],
                     "revision": board.revision,
                     "columns": [
@@ -968,6 +995,18 @@ class BoardMembershipCommandView(APIView):
                         409,
                     )
                 if command == "remove":
+                    has_active_tasks = Task.objects.filter(
+                        board=board,
+                        current_owner_id=membership.user_id,
+                        is_cancelled=False,
+                        is_archived=False,
+                    ).exists()
+                    if has_active_tasks:
+                        raise BoardAdminError(
+                            "member_has_active_tasks",
+                            "Reassign or complete this user's active cards before removing board access.",
+                            409,
+                        )
                     membership.is_active = False
                     membership.save(update_fields=["is_active"])
                     action = "remove_board_membership"

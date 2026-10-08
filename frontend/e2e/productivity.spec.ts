@@ -11,7 +11,11 @@ function env(name: string): string {
 }
 
 const baseURL = () => process.env.E2E_BASE_URL ?? "http://127.0.0.1:5173";
-const monthlyURL = () => process.env.E2E_MONTHLY_URL ?? "http://127.0.0.1:5174";
+const monthlyURL = () => {
+  if (process.env.E2E_MONTHLY_URL) return process.env.E2E_MONTHLY_URL;
+  const base = new URL(baseURL());
+  return `${base.protocol}//${base.hostname}:5174`;
+};
 const boardName = () => env("E2E_BOARD_NAME");
 
 async function login(page: Page, username: string) {
@@ -467,6 +471,16 @@ test("custom list UI: color, archive cards, archive list", async ({ page }) => {
   await page.getByRole("button", { name: "Archive this list" }).click();
   await expect(page.getByRole("heading", { name: listName, exact: true })).toHaveCount(0);
 
+  await page.getByRole("button", { name: "More board actions" }).click();
+  await page.getByRole("dialog", { name: "Menu" }).getByText("Archived items", { exact: true }).click();
+  const archivedLists = page.getByRole("dialog", { name: "Archived items" });
+  await archivedLists.getByRole("button", { name: "Lists", exact: true }).click();
+  const archivedList = archivedLists.locator(".trello-archive-item").filter({ hasText: listName });
+  await expect(archivedList).toBeVisible();
+  await archivedList.getByRole("button", { name: "Restore" }).click();
+  await expect(page.getByRole("heading", { name: listName, exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Close board menu" }).click();
+
   assertClean();
 });
 
@@ -532,6 +546,495 @@ test("card detail modal keeps dark readable text on its light background", async
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Delete card" }).click();
   await expect(card(page, title)).toHaveCount(0);
+
+  assertClean();
+});
+
+
+test("board menu: background, labels, activity, archive restore, and private visibility", async ({ page }) => {
+  await login(page, env("E2E_ADMIN_USERNAME"));
+  await openBoard(page);
+  const assertClean = monitor(page);
+
+  const title = `Menu feature ${Date.now()}`;
+  const labelName = `QA ${Date.now()}`;
+  const addInput = page.getByLabel("Add a card to Inbox");
+  await addInput.fill(title);
+  const [snapshotResponse, createResponse] = await Promise.all([
+    page.waitForResponse((response) =>
+      response.url().endsWith("/snapshot") &&
+      response.request().method() === "GET" &&
+      response.status() !== 304
+    ),
+    page.waitForResponse((response) =>
+      response.url().includes("/api/v1/tasks") &&
+      response.request().method() === "POST"
+    ),
+    page.getByRole("button", { name: "Add card", exact: true }).first().click(),
+  ]);
+  expect(
+    createResponse.status(),
+    `Create card failed: ${await createResponse.text()}`,
+  ).toBe(201);
+  expect(
+    snapshotResponse.status(),
+    `Snapshot refresh failed: ${await snapshotResponse.text()}`,
+  ).toBe(200);
+  await expect(card(page, title)).toBeVisible();
+
+  await page.getByRole("button", { name: "More board actions" }).click();
+  const menu = page.getByRole("dialog", { name: "Menu" });
+  await expect(menu).toBeVisible();
+  await expect(menu.getByText("Visibility: Private")).toBeVisible();
+  await expect(menu.getByText("Settings")).toBeVisible();
+  await expect(menu.getByText("Change background")).toBeVisible();
+  await expect(menu.getByText("Labels", { exact: true })).toBeVisible();
+  await expect(menu.getByText("Activity", { exact: true })).toBeVisible();
+  await expect(menu.getByText("Archived items", { exact: true })).toBeVisible();
+  for (const kind of ["settings", "background", "labels", "activity", "archive"]) {
+    await expect(menu.locator(`[data-menu-icon="${kind}"]`)).toHaveCount(1);
+  }
+
+  await menu.getByText("Change background").click();
+  await page.getByRole("dialog", { name: "Change background" }).getByText("Colors").click();
+  await page.getByRole("button", { name: "Deep navy" }).click();
+  await expect(page.locator(".trello-canvas")).toHaveCSS("background-image", /linear-gradient/);
+
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await page.getByRole("dialog", { name: "Menu" }).getByText("Change background").click();
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6WQAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  await page.locator(".trello-hidden-file-input").setInputFiles({
+    name: "board-background.png",
+    mimeType: "image/png",
+    buffer: png,
+  });
+  await expect(page.locator(".trello-canvas")).toHaveCSS("background-image", /url\(/);
+
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await page.getByRole("dialog", { name: "Menu" }).getByText("Labels", { exact: true }).click();
+  const labelsDialog = page.getByRole("dialog", { name: "Labels" });
+  await labelsDialog.getByRole("button", { name: "Edit green label" }).click();
+  await labelsDialog.getByLabel("Label name").fill(labelName);
+  await labelsDialog.getByLabel("Description / meaning").fill("Ready for quality review");
+  await labelsDialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(labelsDialog.getByText(labelName)).toBeVisible();
+  await page.getByRole("button", { name: "Close board menu" }).click();
+
+  await card(page, title).getByRole("button").click();
+  await page.getByLabel(labelName).click();
+  await expect(page.getByLabel(labelName)).toBeChecked();
+  await expect(page.getByRole("dialog", { name: title }).getByText(labelName)).toBeVisible();
+  await page.getByPlaceholder("Add a comment…").fill("Board menu activity check");
+  await page.getByRole("button", { name: "Add comment" }).click();
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect(card(page, title).getByText(labelName)).toBeVisible();
+  await dragCard(page, title, "DONE");
+
+  await page.getByRole("button", { name: "More board actions" }).click();
+  await page.getByRole("dialog", { name: "Menu" }).getByText("Activity", { exact: true }).click();
+  const activityDialog = page.getByRole("dialog", { name: "Activity" });
+  await expect(activityDialog.getByText("Showing board activity from the past 14 days.")).toBeVisible();
+  await expect(activityDialog.getByText(new RegExp(`commented on ${title}`))).toBeVisible();
+  await expect(activityDialog.getByText(new RegExp(`marked ${title} complete`))).toBeVisible();
+  await page.getByRole("button", { name: "Close board menu" }).click();
+
+  await card(page, title).getByRole("button").click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Archive card" }).click();
+  await expect(card(page, title)).toHaveCount(0);
+
+  await page.getByRole("button", { name: "More board actions" }).click();
+  await page.getByRole("dialog", { name: "Menu" }).getByText("Archived items", { exact: true }).click();
+  const archiveDialog = page.getByRole("dialog", { name: "Archived items" });
+  const archivedItem = archiveDialog.locator(".trello-archive-item").filter({ hasText: title });
+  await expect(archivedItem).toBeVisible();
+  await archivedItem.getByRole("button", { name: "Restore" }).click();
+  await expect(card(page, title)).toBeVisible();
+
+  await page.getByRole("button", { name: "Close board menu" }).click();
+  await card(page, title).getByRole("button").click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Delete card" }).click();
+  await expect(card(page, title)).toHaveCount(0);
+
+  assertClean();
+});
+
+
+test("Version 2 board survives a stale Version 1 snapshot without white-screening", async ({ page }) => {
+  await login(page, env("E2E_MEMBER_USERNAME"));
+  const problems: string[] = [];
+  page.on("pageerror", (error) => problems.push(error.message));
+
+  await page.route("**/api/v1/boards/*/snapshot", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    delete body.labels;
+    if (body.board) {
+      delete body.board.background_key;
+      delete body.board.background_image_url;
+    }
+    for (const column of body.columns ?? []) {
+      for (const task of column.tasks ?? []) {
+        delete task.labels;
+      }
+    }
+    await route.fulfill({ response, json: body });
+  });
+
+  await openBoard(page);
+  const title = `Stale snapshot ${Date.now()}`;
+  await addCard(page, title);
+  await expect(card(page, title)).toBeVisible();
+  await expect(page.locator(".trello-board-page")).toBeVisible();
+  expect(problems, problems.join("\n")).toEqual([]);
+});
+
+
+test("Version 2 board views switch, persist, and show live board presence", async ({ page }) => {
+  await login(page, env("E2E_MEMBER_USERNAME"));
+  await openBoard(page);
+  const assertClean = monitor(page);
+
+  await expect(page.getByRole("button", { name: "Board menu" })).toHaveCount(0);
+  const viewButton = page.getByRole("button", { name: "Change board view" });
+  await expect(viewButton).toBeVisible();
+
+  await viewButton.click();
+  const views = page.getByRole("menu", { name: "Board views" });
+  for (const label of ["Board", "Table", "Calendar", "Dashboard", "Timeline"]) {
+    await expect(views.getByRole("menuitem", { name: new RegExp(label) })).toBeVisible();
+  }
+
+  await views.getByRole("menuitem", { name: /Table/ }).click();
+  await expect(page.getByRole("region", { name: "Table view" })).toBeVisible();
+  await expect(page).toHaveURL(/view=table/);
+  await page.reload();
+  await expect(page.getByRole("region", { name: "Table view" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Change board view" }).click();
+  await page.getByRole("menuitem", { name: /Calendar/ }).click();
+  await expect(page.getByRole("region", { name: "Calendar view" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Change board view" }).click();
+  await page.getByRole("menuitem", { name: /Dashboard/ }).click();
+  await expect(page.getByRole("region", { name: "Dashboard view" })).toBeVisible();
+  await expect(page.getByText("Cards per list")).toBeVisible();
+  await expect(page.getByText("Cards per due date")).toBeVisible();
+  await expect(page.getByText("Cards per member")).toBeVisible();
+  await expect(page.getByText("Cards per label")).toBeVisible();
+
+  await page.getByRole("button", { name: "Change board view" }).click();
+  await page.getByRole("menuitem", { name: /Timeline/ }).click();
+  await expect(page.getByRole("region", { name: "Timeline view" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Change board view" }).click();
+  await page.getByRole("menuitem", { name: /Board/ }).click();
+  await expect(page.locator(".trello-board-lists")).toBeVisible();
+
+  const secondBrowser = await chromium.launch();
+  try {
+    const secondContext = await secondBrowser.newContext({ baseURL: baseURL() });
+    const secondPage = await secondContext.newPage();
+    await login(secondPage, env("E2E_ADMIN_USERNAME"));
+    await openBoard(secondPage);
+    await page.bringToFront();
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    const presenceStack = page.locator(".trello-presence-stack");
+    await expect(presenceStack).toContainText("", { timeout: 5000 });
+    await expect
+      .poll(async () => page.locator(".trello-presence-avatar").count(), { timeout: 5000 })
+      .toBeGreaterThanOrEqual(2);
+    const presenceTitles = await page.locator(".trello-presence-avatar").evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute("title") ?? ""),
+    );
+    expect(presenceTitles.some((title) => title.includes(env("E2E_MEMBER_USERNAME")))).toBeTruthy();
+    expect(presenceTitles.some((title) => title.includes(env("E2E_ADMIN_USERNAME")))).toBeTruthy();
+    await secondContext.close();
+  } finally {
+    await secondBrowser.close();
+  }
+
+  assertClean();
+});
+
+
+test("Version 2 Trello-style view icons and Timeline dropdown behavior", async ({ page }) => {
+  await login(page, env("E2E_MEMBER_USERNAME"));
+  await openBoard(page);
+  const assertClean = monitor(page);
+
+  await page.getByRole("button", { name: "Change board view" }).click();
+  const views = page.getByRole("menu", { name: "Board views" });
+  await expect(views.getByRole("menuitem")).toHaveCount(5);
+  await expect(views.getByText("Map", { exact: true })).toHaveCount(0);
+  await expect(views.locator("svg")).toHaveCount(5);
+  await views.getByRole("menuitem", { name: /Timeline/ }).click();
+
+  const timeline = page.getByRole("region", { name: "Timeline view" });
+  await expect(timeline).toBeVisible();
+
+  const scale = timeline.getByRole("button", { name: "Timeline scale" });
+  await expect(scale).toHaveText(/Week/);
+
+  for (const option of ["Day", "Week", "Month", "Quarter", "Year"]) {
+    await scale.click();
+    await timeline.getByRole("menuitemradio", { name: option, exact: true }).click();
+    await expect(scale).toHaveText(new RegExp(option));
+    await expect(
+      timeline.locator(`.trello-timeline-grid--${option.toLowerCase()}`),
+    ).toBeVisible();
+  }
+
+  const grouping = timeline.getByRole("button", { name: "Timeline grouping" });
+  await expect(grouping).toHaveText(/List/);
+
+  await grouping.click();
+  await timeline.getByRole("menuitemradio", { name: "Member", exact: true }).click();
+  await expect(grouping).toHaveText(/Member/);
+  await expect(timeline.getByText("No members", { exact: true })).toBeVisible();
+
+  await grouping.click();
+  await timeline.getByRole("menuitemradio", { name: "Label", exact: true }).click();
+  await expect(grouping).toHaveText(/Label/);
+  await expect(timeline.getByText("No labels", { exact: true })).toBeVisible();
+
+  await grouping.click();
+  await timeline.getByRole("menuitemradio", { name: "None", exact: true }).click();
+  await expect(grouping).toHaveText(/None/);
+  await expect(timeline.locator(".trello-timeline-grid.is-ungrouped")).toBeVisible();
+
+  await timeline.getByRole("button", { name: "Close timeline view" }).click();
+  await expect(page.locator(".trello-board-lists")).toBeVisible();
+
+  assertClean();
+});
+
+
+test("Version 2 Planner is a functional weekly agenda with Trello-style due filters", async ({ page }) => {
+  await login(page, env("E2E_MEMBER_USERNAME"));
+  await openBoard(page);
+  const assertClean = monitor(page);
+
+  const boardMatch = page.url().match(/\/boards\/([^?]+)/);
+  expect(boardMatch).not.toBeNull();
+  const boardId = boardMatch?.[1] ?? "";
+  const sessionUser = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/session/me/");
+    return response.json();
+  });
+
+  const due = new Date();
+  due.setHours(due.getHours() + 2, 0, 0, 0);
+  const fakeTask = {
+    id: "00000000-0000-4000-8000-000000000099",
+    board_id: boardId,
+    column_id: "00000000-0000-4000-8000-000000000088",
+    column_state: "TODO",
+    column_name: "To Do",
+    title: "Planner assigned agenda item",
+    description: "",
+    priority: 2,
+    current_owner_id: sessionUser.id,
+    original_owner_id: sessionUser.id,
+    row_version: 1,
+    position: 0,
+    draft_due_at: due.toISOString(),
+    draft_acceptance_criteria: "",
+    recurrence_frequency: "NONE",
+    recurrence_next_at: null,
+    recurrence_last_triggered_at: null,
+    recurrence_generation: 0,
+    committed_at: null,
+    current_commitment: null,
+    is_cancelled: false,
+    is_archived: false,
+    archived_at: null,
+    cancelled_at: null,
+    cancelled_reason: "",
+    checklist_items: [],
+    comments: [],
+    change_proposals: [],
+    submissions: [],
+    labels: [],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  await page.route("**/api/v1/tasks", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([fakeTask]) });
+      return;
+    }
+    await route.continue();
+  });
+
+  const canvas = page.locator(".trello-canvas");
+  const before = await canvas.boundingBox();
+  expect(before).not.toBeNull();
+
+  await page.locator(".trello-dock button").filter({ hasText: "Planner" }).click();
+  const planner = page.getByRole("complementary", { name: "Planner" });
+  await expect(planner).toBeVisible();
+  await expect(page.locator(".trello-workspace")).toHaveClass(/trello-workspace--planner/);
+  await expect(planner.getByText("Connect your calendar account")).toHaveCount(0);
+
+  const after = await canvas.boundingBox();
+  expect(after).not.toBeNull();
+  expect(after!.x).toBeGreaterThan(before!.x);
+  expect(after!.width).toBeLessThan(before!.width);
+
+  const toolbarButtons = planner.locator(".trello-planner-toolbar button");
+  await expect(toolbarButtons).toHaveCount(5);
+  await expect(planner.getByText("Planner assigned agenda item")).toBeVisible();
+
+  await planner.getByRole("button", { name: "Previous day" }).click();
+  await expect(planner.locator(".trello-planner-day h3").first()).toContainText("Yesterday");
+  await planner.getByRole("button", { name: "Next day" }).click();
+  await expect(planner.locator(".trello-planner-day h3").first()).toContainText("Today");
+  await planner.getByRole("button", { name: "Next day" }).click();
+  await expect(planner.locator(".trello-planner-day h3").first()).toContainText("Tomorrow");
+  await planner.getByRole("button", { name: "Today", exact: true }).click();
+  await expect(planner.locator(".trello-planner-day h3").first()).toContainText("Today");
+
+  await planner.getByRole("button", { name: "Planner month" }).click();
+  const datePicker = page.getByRole("dialog", { name: "Select date" });
+  await expect(datePicker).toBeVisible();
+  const initialMonthHeading = await datePicker.locator(".trello-planner-date-picker__month strong").textContent();
+  for (let index = 0; index < 14; index += 1) {
+    await datePicker.getByRole("button", { name: "Next month" }).click();
+  }
+  const futureMonthHeading = await datePicker.locator(".trello-planner-date-picker__month strong").textContent();
+  expect(futureMonthHeading).not.toBe(initialMonthHeading);
+  expect(futureMonthHeading).toContain(String(new Date().getFullYear() + 1));
+
+  const firstFutureDate = datePicker.locator(".trello-planner-date-picker__grid button:not(.is-outside)").first();
+  await firstFutureDate.click();
+  await expect(datePicker).toHaveCount(0);
+  await expect(planner.getByRole("button", { name: "Planner month" })).toHaveAttribute("aria-expanded", "false");
+  await expect(planner.locator(".trello-planner-day h3").first()).not.toContainText("Today");
+
+  await planner.getByRole("button", { name: "Planner month" }).click();
+  const pastPicker = page.getByRole("dialog", { name: "Select date" });
+  for (let index = 0; index < 16; index += 1) {
+    await pastPicker.getByRole("button", { name: "Previous month" }).click();
+  }
+  await expect(pastPicker.locator(".trello-planner-date-picker__month strong")).not.toContainText(
+    String(new Date().getFullYear() + 1),
+  );
+  await pastPicker.getByRole("button", { name: "Close date picker" }).click();
+  await planner.getByRole("button", { name: "Today", exact: true }).click();
+
+  const plannerBeforeResize = await planner.boundingBox();
+  const canvasBeforeResize = await canvas.boundingBox();
+  const plannerResizeHandle = page.getByRole("separator", { name: "Resize Planner" });
+  const plannerHandleBox = await plannerResizeHandle.boundingBox();
+  expect(plannerBeforeResize).not.toBeNull();
+  expect(canvasBeforeResize).not.toBeNull();
+  expect(plannerHandleBox).not.toBeNull();
+  await page.mouse.move(plannerHandleBox!.x + plannerHandleBox!.width / 2, plannerHandleBox!.y + 120);
+  await page.mouse.down();
+  await page.mouse.move(plannerHandleBox!.x + plannerHandleBox!.width / 2 + 70, plannerHandleBox!.y + 120);
+  await page.mouse.up();
+  const plannerAfterResize = await planner.boundingBox();
+  const canvasAfterPlannerResize = await canvas.boundingBox();
+  expect(plannerAfterResize).not.toBeNull();
+  expect(canvasAfterPlannerResize).not.toBeNull();
+  expect(plannerAfterResize!.width).toBeGreaterThan(plannerBeforeResize!.width + 45);
+  expect(canvasAfterPlannerResize!.x).toBeGreaterThan(canvasBeforeResize!.x + 45);
+
+  const inbox = page.locator(".trello-inbox");
+  const inboxBeforeResize = await inbox.boundingBox();
+  const inboxResizeHandle = page.getByRole("separator", { name: "Resize Inbox" });
+  const inboxHandleBox = await inboxResizeHandle.boundingBox();
+  expect(inboxBeforeResize).not.toBeNull();
+  expect(inboxHandleBox).not.toBeNull();
+  await page.mouse.move(inboxHandleBox!.x + inboxHandleBox!.width / 2, inboxHandleBox!.y + 120);
+  await page.mouse.down();
+  await page.mouse.move(inboxHandleBox!.x + inboxHandleBox!.width / 2 + 40, inboxHandleBox!.y + 120);
+  await page.mouse.up();
+  const inboxAfterResize = await inbox.boundingBox();
+  expect(inboxAfterResize).not.toBeNull();
+  expect(inboxAfterResize!.width).toBeGreaterThan(inboxBeforeResize!.width + 25);
+
+  await planner.getByRole("button", { name: "Planner options" }).click();
+  const menu = page.getByRole("menu", { name: "Planner menu" });
+  await expect(menu.getByRole("menuitem")).toHaveCount(1);
+  await expect(menu.getByRole("menuitem", { name: "Filter due cards shown" })).toBeVisible();
+  await expect(menu.getByText("Add account")).toHaveCount(0);
+
+  await menu.getByRole("menuitem", { name: "Filter due cards shown" }).click();
+  const filter = page.getByRole("dialog", { name: "Filter due cards shown" });
+  const assigned = filter.getByLabel("Cards assigned to me");
+  const currentBoard = filter.getByLabel("Cards on this board");
+  await expect(assigned).toBeChecked();
+  await expect(currentBoard).toBeChecked();
+  await expect(filter.getByText("More options")).toHaveCount(0);
+
+  await filter.locator(".trello-planner-toggle-row").filter({ hasText: "Cards assigned to me" }).click();
+  await expect(assigned).not.toBeChecked();
+  await expect(planner.getByText("Planner assigned agenda item")).toBeVisible();
+  await filter.locator(".trello-planner-toggle-row").filter({ hasText: "Cards on this board" }).click();
+  await expect(currentBoard).not.toBeChecked();
+  await expect(planner.getByText("Planner assigned agenda item")).toHaveCount(0);
+  await filter.locator(".trello-planner-toggle-row").filter({ hasText: "Cards assigned to me" }).click();
+  await expect(assigned).toBeChecked();
+  await expect(planner.getByText("Planner assigned agenda item")).toBeVisible();
+
+  await page.locator(".trello-dock button").filter({ hasText: "Planner" }).click();
+  await expect(planner).toHaveCount(0);
+  await expect(page.locator(".trello-workspace")).not.toHaveClass(/trello-workspace--planner/);
+
+  const restored = await canvas.boundingBox();
+  expect(restored).not.toBeNull();
+  expect(restored!.x).toBeLessThan(canvasAfterPlannerResize!.x - 300);
+  expect(restored!.width).toBeGreaterThan(canvasAfterPlannerResize!.width + 300);
+
+  assertClean();
+});
+
+
+test("Version 2 Planner popovers remain fully visible at compact desktop widths", async ({ page }) => {
+  await page.setViewportSize({ width: 1050, height: 760 });
+  await login(page, env("E2E_MEMBER_USERNAME"));
+  await openBoard(page);
+  const assertClean = monitor(page);
+
+  await expect(page.getByText("Consolidate your to-dos")).toHaveCount(0);
+  await expect(page.locator(".trello-dock .trello-dock__icon")).toHaveCount(4);
+
+  await page.locator(".trello-dock button").filter({ hasText: "Planner" }).click();
+  const planner = page.getByRole("complementary", { name: "Planner" });
+  await expect(planner).toBeVisible();
+
+  const assertInsideViewport = async (locator: ReturnType<Page["locator"]>) => {
+    const box = await locator.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(1050);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(760);
+  };
+
+  await planner.getByRole("button", { name: "Planner month" }).click();
+  const datePicker = page.getByRole("dialog", { name: "Select date" });
+  await expect(datePicker).toBeVisible();
+  await assertInsideViewport(datePicker);
+  await datePicker.getByRole("button", { name: "Close date picker" }).click();
+
+  await planner.getByRole("button", { name: "Planner options" }).click();
+  const menu = page.getByRole("menu", { name: "Planner menu" });
+  await expect(menu).toBeVisible();
+  await assertInsideViewport(menu);
+
+  await menu.getByRole("menuitem", { name: "Filter due cards shown" }).click();
+  const filter = page.getByRole("dialog", { name: "Filter due cards shown" });
+  await expect(filter).toBeVisible();
+  await assertInsideViewport(filter);
 
   assertClean();
 });

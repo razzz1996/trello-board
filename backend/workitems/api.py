@@ -72,6 +72,7 @@ class TaskCollectionView(APIView):
                 "comments__history",
                 "change_proposals",
                 "submissions__review",
+                "labels",
             )
             .distinct()
         )
@@ -297,6 +298,16 @@ class TaskCommandView(APIView):
                     "recurrence_next_at",
                 ),
             )
+        if command == "set_labels":
+            label_ids = payload.get("label_ids", [])
+            if not isinstance(label_ids, list):
+                raise DomainError("invalid_label", "label_ids must be a list.")
+            return services.set_task_labels(
+                **common,
+                label_ids=[str(value) for value in label_ids],
+            )
+        if command == "archive_task":
+            return services.archive_task(**common)
         if command == "move_task":
             return services.move_task(
                 **common,

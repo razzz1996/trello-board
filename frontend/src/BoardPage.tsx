@@ -43,10 +43,19 @@ import {
   createTask,
   getBoardSnapshot,
   renameBoard,
+  touchBoardPresence,
 } from "./api";
+import { BOARD_BACKGROUND_STYLES, BoardMenu } from "./BoardMenu";
+import {
+  BoardAlternateView,
+  BoardViewSwitcher,
+  type BoardViewKey,
+} from "./BoardViews";
+import { PlannerPanel } from "./PlannerPanel";
 import { TaskDetailModal } from "./TaskActions";
 import type {
   BoardColumn,
+  BoardPresenceUser,
   BoardSnapshot,
   Role,
   SessionUser,
@@ -85,6 +94,19 @@ function SortableTaskCard({
       {...listeners}
     >
       <button className="task-card__body" type="button" onClick={onOpen}>
+        {(task.labels ?? []).length > 0 && (
+          <div className="trello-card-labels" aria-label="Card labels">
+            {(task.labels ?? []).map((label) => (
+              <span
+                key={label.id}
+                data-label-color={label.color}
+                title={label.description || label.name || `${label.color} label`}
+              >
+                {label.name}
+              </span>
+            ))}
+          </div>
+        )}
         {task.priority > 0 && (
           <span className="stars" aria-label={`Priority ${task.priority} of 3`}>
             {stars(task.priority)}
@@ -664,7 +686,7 @@ function InboxRail({
           )}
         </div>
       </SortableContext>
-      <div className="trello-inbox__tip">◉ Consolidate your to-dos</div>
+
     </aside>
   );
 }
@@ -1051,20 +1073,142 @@ function BoardTitleEditor({
   );
 }
 
-function BoardDock() {
+function PanelResizeHandle({
+  label,
+  onResize,
+}: {
+  label: string;
+  onResize: (delta: number) => void;
+}) {
   return (
-    <nav className="trello-dock" aria-label="Board shortcuts">
+    <div
+      className="trello-panel-resizer"
+      role="separator"
+      aria-label={label}
+      aria-orientation="vertical"
+      tabIndex={0}
+      onPointerDown={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const startX = event.clientX;
+        let applied = 0;
+
+        const move = (moveEvent: PointerEvent) => {
+          const next = moveEvent.clientX - startX;
+          const delta = next - applied;
+          applied = next;
+          onResize(delta);
+        };
+        const stop = () => {
+          window.removeEventListener("pointermove", move);
+          window.removeEventListener("pointerup", stop);
+          document.body.classList.remove("trello-panel-resizing");
+        };
+
+        document.body.classList.add("trello-panel-resizing");
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", stop, { once: true });
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          onResize(-20);
+        } else if (event.key === "ArrowRight") {
+          event.preventDefault();
+          onResize(20);
+        }
+      }}
+    >
+      <span aria-hidden="true" />
+    </div>
+  );
+}
+
+function DockInboxIcon() {
+  return (
+    <svg className="trello-dock__icon" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="4" y="4.5" width="16" height="15" rx="2" />
+      <path d="M7 10h10M8 13.5h2.1l1.2 1.8h1.4l1.2-1.8H16" />
+    </svg>
+  );
+}
+
+function DockPlannerIcon() {
+  return (
+    <svg className="trello-dock__icon" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="4" y="5.5" width="16" height="14" rx="2" />
+      <path d="M8 3.5v4M16 3.5v4M4 9h16" />
+    </svg>
+  );
+}
+
+function DockBoardIcon() {
+  return (
+    <svg className="trello-dock__icon" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3.5" y="4" width="17" height="16" rx="2" />
+      <path d="M9 4v16M15 4v16" />
+    </svg>
+  );
+}
+
+function DockSwitchIcon() {
+  return (
+    <svg className="trello-dock__icon" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="6.5" y="6" width="13.5" height="12.5" rx="1.8" />
+      <path d="M4 15.5V5.8A1.8 1.8 0 0 1 5.8 4H16" />
+      <path d="M9.5 10h7M9.5 13h5" />
+    </svg>
+  );
+}
+
+function BoardDock({
+  plannerOpen,
+  onTogglePlanner,
+  inboxWidth,
+  plannerWidth,
+}: {
+  plannerOpen: boolean;
+  onTogglePlanner: () => void;
+  inboxWidth: number;
+  plannerWidth: number;
+}) {
+  return (
+    <nav
+      className={`trello-dock ${plannerOpen ? "trello-dock--planner" : ""}`}
+      aria-label="Board shortcuts"
+      style={{
+        left: plannerOpen
+          ? `calc(${inboxWidth + plannerWidth + 16}px + (100vw - ${inboxWidth + plannerWidth + 16}px) / 2)`
+          : `calc(${inboxWidth + 8}px + (100vw - ${inboxWidth + 8}px) / 2)`,
+      }}
+    >
       <button
         type="button"
+        className="trello-dock__active"
         onClick={() =>
           document.querySelector<HTMLTextAreaElement>(".trello-inbox textarea")?.focus()
         }
       >
-        ▣ <span>Inbox</span>
+        <DockInboxIcon />
+        <span>Inbox</span>
       </button>
-      <Link to="/calendar">▦ <span>Planner</span></Link>
-      <span className="trello-dock__active">▥ <span>Board</span></span>
-      <Link to="/">▤ <span>Switch boards</span></Link>
+      <button
+        type="button"
+        className={plannerOpen ? "trello-dock__active" : undefined}
+        aria-pressed={plannerOpen}
+        onClick={onTogglePlanner}
+      >
+        <DockPlannerIcon />
+        <span>Planner</span>
+      </button>
+      <span className="trello-dock__active">
+        <DockBoardIcon />
+        <span>Board</span>
+      </span>
+      <Link to="/">
+        <DockSwitchIcon />
+        <span>Switch boards</span>
+      </Link>
     </nav>
   );
 }
@@ -1072,7 +1216,7 @@ function BoardDock() {
 export function BoardPage({ user }: { user: SessionUser }) {
   const { boardId } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [snapshot, setSnapshot] = useState<BoardSnapshot | null>(null);
   const snapshotRevision = useRef<number | undefined>(undefined);
   const [error, setError] = useState("");
@@ -1080,6 +1224,32 @@ export function BoardPage({ user }: { user: SessionUser }) {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [membersOpen, setMembersOpen] = useState(false);
   const [memberPanelAddMode, setMemberPanelAddMode] = useState(false);
+  const [boardMenuOpen, setBoardMenuOpen] = useState(false);
+  const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const [presenceUsers, setPresenceUsers] = useState<BoardPresenceUser[]>([]);
+  const [plannerOpen, setPlannerOpen] = useState(false);
+  const [inboxWidth, setInboxWidth] = useState(264);
+  const [plannerWidth, setPlannerWidth] = useState(380);
+
+  const requestedView = searchParams.get("view");
+  const boardView: BoardViewKey =
+    requestedView === "table" ||
+    requestedView === "calendar" ||
+    requestedView === "dashboard" ||
+    requestedView === "timeline"
+      ? requestedView
+      : "board";
+
+  const setBoardView = useCallback(
+    (view: BoardViewKey) => {
+      const next = new URLSearchParams(searchParams);
+      if (view === "board") next.delete("view");
+      else next.set("view", view);
+      setSearchParams(next, { replace: true });
+      setViewMenuOpen(false);
+    },
+    [searchParams, setSearchParams],
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -1114,11 +1284,42 @@ export function BoardPage({ user }: { user: SessionUser }) {
     setSnapshot(null);
     setMembersOpen(false);
     setMemberPanelAddMode(false);
+    setBoardMenuOpen(false);
+    setViewMenuOpen(false);
+    setPresenceUsers([]);
+    setPlannerOpen(false);
   }, [boardId]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!boardId) return;
+    let active = true;
+
+    const heartbeat = async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const result = await touchBoardPresence(boardId);
+        if (active) setPresenceUsers(result.users);
+      } catch {
+        // Presence is supplemental. Board access should keep working if a heartbeat fails.
+      }
+    };
+
+    void heartbeat();
+    const presenceInterval = window.setInterval(() => void heartbeat(), 25_000);
+    const heartbeatOnFocus = () => void heartbeat();
+    window.addEventListener("focus", heartbeatOnFocus);
+    document.addEventListener("visibilitychange", heartbeatOnFocus);
+    return () => {
+      active = false;
+      window.clearInterval(presenceInterval);
+      window.removeEventListener("focus", heartbeatOnFocus);
+      document.removeEventListener("visibilitychange", heartbeatOnFocus);
+    };
+  }, [boardId]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -1167,6 +1368,16 @@ export function BoardPage({ user }: { user: SessionUser }) {
       }),
     }));
   }, [columns, memberName, query]);
+
+  useEffect(() => {
+    if (!snapshot) return;
+    const requestedTaskId = searchParams.get("task");
+    if (!requestedTaskId) return;
+    const exists = snapshot.columns.some((column) =>
+      column.tasks.some((task) => task.id === requestedTaskId),
+    );
+    if (exists) setSelectedTaskId(requestedTaskId);
+  }, [searchParams, snapshot]);
 
   async function moveTask(task: Task, targetColumnId: string, targetPosition: number | null) {
     if (!snapshot) return;
@@ -1226,6 +1437,7 @@ export function BoardPage({ user }: { user: SessionUser }) {
     );
   }
 
+  const currentBoardId = snapshot.board.id;
   const inbox = displayColumns.find((column) => column.state === "BACKLOG");
   const boardColumns = displayColumns.filter((column) => column.state !== "BACKLOG");
   const selected = taskById(selectedTaskId);
@@ -1234,6 +1446,41 @@ export function BoardPage({ user }: { user: SessionUser }) {
     snapshotRevision.current = undefined;
     await refresh();
   }
+
+  function addFromAlternateView() {
+    setBoardView("board");
+    window.setTimeout(() => {
+      document.querySelector<HTMLTextAreaElement>(".trello-inbox textarea")?.focus();
+    }, 80);
+  }
+
+  function openPlannerTask(task: Task) {
+    if (task.board_id === currentBoardId) {
+      setSelectedTaskId(task.id);
+      return;
+    }
+    navigate(`/boards/${task.board_id}?task=${encodeURIComponent(task.id)}`);
+  }
+
+  function closeSelectedTask() {
+    setSelectedTaskId(null);
+    if (!searchParams.has("task")) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete("task");
+    setSearchParams(next, { replace: true });
+  }
+
+  const activePresence =
+    presenceUsers.length > 0
+      ? presenceUsers
+      : [
+          {
+            id: user.id,
+            username: user.username,
+            last_seen_at: new Date().toISOString(),
+            is_current_user: true,
+          },
+        ];
 
   return (
     <section className="trello-board-page">
@@ -1245,8 +1492,23 @@ export function BoardPage({ user }: { user: SessionUser }) {
         collisionDetection={closestCorners}
         onDragEnd={(event) => void onDragEnd(event)}
       >
-        <div className="trello-workspace">
-          {inbox && (
+        <div
+          className={`trello-workspace ${
+            plannerOpen
+              ? "trello-workspace--planner"
+              : boardView !== "board"
+                ? "trello-workspace--full"
+                : ""
+          }`}
+          style={{
+            gridTemplateColumns: plannerOpen
+              ? `${inboxWidth}px 8px ${plannerWidth}px 8px minmax(420px, 1fr)`
+              : boardView === "board"
+                ? `${inboxWidth}px 8px minmax(420px, 1fr)`
+                : undefined,
+          }}
+        >
+          {(boardView === "board" || plannerOpen) && inbox && (
             <InboxRail
               snapshot={snapshot}
               column={inbox}
@@ -1255,8 +1517,47 @@ export function BoardPage({ user }: { user: SessionUser }) {
               onChanged={changed}
             />
           )}
+          {(boardView === "board" || plannerOpen) && inbox && (
+            <PanelResizeHandle
+              label="Resize Inbox"
+              onResize={(delta) =>
+                setInboxWidth((current) => Math.max(220, Math.min(420, current + delta)))
+              }
+            />
+          )}
 
-          <main className="trello-canvas">
+          <PlannerPanel
+            open={plannerOpen}
+            user={user}
+            currentBoardId={currentBoardId}
+            refreshToken={snapshot.revision}
+            onOpenTask={openPlannerTask}
+          />
+          {plannerOpen && (
+            <PanelResizeHandle
+              label="Resize Planner"
+              onResize={(delta) =>
+                setPlannerWidth((current) => Math.max(300, Math.min(560, current + delta)))
+              }
+            />
+          )}
+
+          <main
+            className={`trello-canvas ${boardView !== "board" ? "trello-canvas--alt-view" : ""}`}
+            style={
+              snapshot.board.background_image_url
+                ? {
+                    backgroundImage: `linear-gradient(rgba(0,0,0,.10), rgba(0,0,0,.10)), url("${snapshot.board.background_image_url}")`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                  }
+                : {
+                    background:
+                      BOARD_BACKGROUND_STYLES[snapshot.board.background_key] ??
+                      BOARD_BACKGROUND_STYLES.rainbow,
+                  }
+            }
+          >
             <header className="trello-board-toolbar">
               <div className="trello-board-toolbar__title">
                 <Link to="/" className="trello-board-toolbar__back" aria-label="Back to boards">
@@ -1264,14 +1565,37 @@ export function BoardPage({ user }: { user: SessionUser }) {
                 </Link>
                 <BoardTitleEditor
                   snapshot={snapshot}
-                  canEdit={user.is_admin}
+                  canEdit={user.is_admin || snapshot.membership.role === "MANAGER"}
                   onChanged={changed}
                 />
-                <button type="button" aria-label="Board view">▥</button>
-                <button type="button" aria-label="Board menu">⌄</button>
+                <BoardViewSwitcher
+                  value={boardView}
+                  open={viewMenuOpen}
+                  onOpenChange={setViewMenuOpen}
+                  onChange={setBoardView}
+                />
               </div>
               <div className="trello-board-toolbar__actions">
-                <span className="trello-avatar">{user.username.slice(0, 2).toUpperCase()}</span>
+                <div
+                  className="trello-presence-stack"
+                  aria-label={`${activePresence.length} currently viewing this board`}
+                  title={activePresence.map((person) => person.username).join(", ")}
+                >
+                  {activePresence.slice(0, 4).map((person, index) => (
+                    <span
+                      className="trello-presence-avatar"
+                      key={person.id}
+                      style={{ zIndex: 10 - index }}
+                      title={`${person.username} is viewing this board`}
+                    >
+                      {person.username.slice(0, 2).toUpperCase()}
+                      <i aria-hidden="true" />
+                    </span>
+                  ))}
+                  {activePresence.length > 4 && (
+                    <span className="trello-presence-more">+{activePresence.length - 4}</span>
+                  )}
+                </div>
                 <button
                   className="trello-shared trello-board-members-button"
                   type="button"
@@ -1296,7 +1620,14 @@ export function BoardPage({ user }: { user: SessionUser }) {
                     ＋ Add user
                   </button>
                 )}
-                <button type="button" aria-label="More board actions">•••</button>
+                <button
+                  type="button"
+                  aria-label="More board actions"
+                  aria-expanded={boardMenuOpen}
+                  onClick={() => setBoardMenuOpen((value) => !value)}
+                >
+                  •••
+                </button>
               </div>
             </header>
 
@@ -1306,25 +1637,56 @@ export function BoardPage({ user }: { user: SessionUser }) {
               </div>
             )}
 
-            <div className="kanban-board trello-board-lists">
-              {boardColumns.map((column, index) => (
-                <ColumnView
-                  key={column.id}
-                  snapshot={snapshot}
-                  column={column}
-                  memberName={memberName}
-                  onOpen={(task) => setSelectedTaskId(task.id)}
-                  onChanged={changed}
-                  colorIndex={index}
-                />
-              ))}
-              <AddListControl snapshot={snapshot} onChanged={changed} />
-            </div>
+            {boardView === "board" ? (
+              <div className="kanban-board trello-board-lists">
+                {boardColumns.map((column, index) => (
+                  <ColumnView
+                    key={column.id}
+                    snapshot={snapshot}
+                    column={column}
+                    memberName={memberName}
+                    onOpen={(task) => setSelectedTaskId(task.id)}
+                    onChanged={changed}
+                    colorIndex={index}
+                  />
+                ))}
+                <AddListControl snapshot={snapshot} onChanged={changed} />
+              </div>
+            ) : (
+              <BoardAlternateView
+                view={boardView}
+                snapshot={snapshot}
+                columns={displayColumns}
+                memberName={memberName}
+                onOpen={(task) => setSelectedTaskId(task.id)}
+                onAdd={addFromAlternateView}
+                onClose={() => setBoardView("board")}
+              />
+            )}
           </main>
         </div>
       </DndContext>
 
-      <BoardDock />
+      <BoardDock
+        plannerOpen={plannerOpen}
+        onTogglePlanner={() => setPlannerOpen((value) => !value)}
+        inboxWidth={inboxWidth}
+        plannerWidth={plannerWidth}
+      />
+
+      {boardMenuOpen && (
+        <BoardMenu
+          snapshot={snapshot}
+          currentUser={user}
+          onClose={() => setBoardMenuOpen(false)}
+          onChanged={changed}
+          onOpenMembers={() => {
+            setBoardMenuOpen(false);
+            setMemberPanelAddMode(false);
+            setMembersOpen(true);
+          }}
+        />
+      )}
 
       <BoardMembersPanel
         snapshot={snapshot}
@@ -1343,10 +1705,10 @@ export function BoardPage({ user }: { user: SessionUser }) {
           task={selected}
           snapshot={snapshot}
           currentUser={user}
-          onClose={() => setSelectedTaskId(null)}
+          onClose={closeSelectedTask}
           onChanged={changed}
           onDeleted={async () => {
-            setSelectedTaskId(null);
+            closeSelectedTask();
             await changed();
           }}
         />

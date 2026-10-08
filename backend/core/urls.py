@@ -15,6 +15,17 @@ from boards.api import (
     BoardRenameView,
     BoardSnapshotView,
 )
+from boards.menu_api import (
+    ArchivedListCommandView,
+    ArchivedTaskCommandView,
+    BoardActivityView,
+    BoardArchiveView,
+    BoardBackgroundImageView,
+    BoardBackgroundView,
+    BoardLabelCollectionView,
+    BoardLabelCommandView,
+    BoardPresenceView,
+)
 from django.urls import path
 from notifications.api import NotificationInboxView, NotificationReadView
 from reports.api import ReportCollectionView, ReportDetailView
@@ -73,6 +84,51 @@ urlpatterns = [
         "boards/<uuid:board_id>/memberships/<uuid:user_id>/commands/<str:command>",
         BoardMembershipCommandView.as_view(),
         name="board-membership-command",
+    ),
+    path(
+        "boards/<uuid:board_id>/presence",
+        BoardPresenceView.as_view(),
+        name="board-presence",
+    ),
+    path(
+        "boards/<uuid:board_id>/background",
+        BoardBackgroundView.as_view(),
+        name="board-background",
+    ),
+    path(
+        "boards/<uuid:board_id>/background-image",
+        BoardBackgroundImageView.as_view(),
+        name="board-background-image",
+    ),
+    path(
+        "boards/<uuid:board_id>/labels",
+        BoardLabelCollectionView.as_view(),
+        name="board-labels",
+    ),
+    path(
+        "boards/<uuid:board_id>/labels/<uuid:label_id>/commands/<str:command>",
+        BoardLabelCommandView.as_view(),
+        name="board-label-command",
+    ),
+    path(
+        "boards/<uuid:board_id>/activity",
+        BoardActivityView.as_view(),
+        name="board-activity",
+    ),
+    path(
+        "boards/<uuid:board_id>/archived",
+        BoardArchiveView.as_view(),
+        name="board-archived",
+    ),
+    path(
+        "boards/<uuid:board_id>/archived/tasks/<uuid:task_id>/commands/<str:command>",
+        ArchivedTaskCommandView.as_view(),
+        name="board-archived-task-command",
+    ),
+    path(
+        "boards/<uuid:board_id>/archived/lists/<uuid:column_id>/commands/<str:command>",
+        ArchivedListCommandView.as_view(),
+        name="board-archived-list-command",
     ),
     path("notifications", NotificationInboxView.as_view(), name="notifications"),
     path(

@@ -36,6 +36,9 @@ def delete_board(*, actor, board_id, confirm_name: str) -> dict[str, Any]:
                 400,
             )
 
+        background_name = board.background_image.name if board.background_image else ""
+        background_storage = board.background_image.storage if board.background_image else None
+
         task_ids = list(Task.objects.filter(board=board).values_list("id", flat=True))
         schedule_ids = list(Schedule.objects.filter(board=board).values_list("id", flat=True))
         for schedule_id in schedule_ids:
@@ -58,6 +61,15 @@ def delete_board(*, actor, board_id, confirm_name: str) -> dict[str, Any]:
             "schedule_count": len(schedule_ids),
         }
         board.delete()
+
+    if background_name and background_storage is not None:
+        try:
+            background_storage.delete(background_name)
+        except Exception:
+            logger.exception(
+                "Board deleted but its background file could not be removed.",
+                extra={"board_id": summary["board_id"]},
+            )
 
     logger.info(
         "Board permanently deleted.",

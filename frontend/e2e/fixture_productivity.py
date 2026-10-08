@@ -18,7 +18,7 @@ django.setup()
 from accounts.models import AccountAuditEvent, User
 from accounts.throttle import clear_success
 from boards.deletion import delete_board
-from boards.models import Board, BoardColumn, BoardMembership
+from boards.models import Board, BoardColumn, BoardLabel, BoardMembership
 from core.models import RequestReceipt
 from django.contrib.sessions.models import Session
 from notifications.models import Job, Notification
@@ -109,6 +109,9 @@ for position, (state, name) in enumerate(columns):
         name=name,
         position=position,
     )
+
+for position, color in enumerate(("green", "yellow", "orange", "red", "purple", "blue")):
+    BoardLabel.objects.create(board=board, color=color, position=position)
 
 for user, role in (
     (admin, BoardMembership.Role.MANAGER),

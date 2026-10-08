@@ -367,6 +367,7 @@ export function TaskDetailModal({
   const member = snapshot.members.find((item) => item.id === task.current_owner_id);
   const [error, setError] = useState("");
   const [busyItem, setBusyItem] = useState<string | null>(null);
+  const [archiving, setArchiving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   async function toggleChecklist(itemId: string, checked: boolean) {
@@ -384,6 +385,45 @@ export function TaskDetailModal({
       setError(errorMessage(caught));
     } finally {
       setBusyItem(null);
+    }
+  }
+
+  async function toggleLabel(labelId: string, checked: boolean) {
+    setBusyItem(`label:${labelId}`);
+    setError("");
+    try {
+      const current = (task.labels ?? []).map((label) => label.id);
+      const next = checked
+        ? Array.from(new Set([...current, labelId]))
+        : current.filter((id) => id !== labelId);
+      await commandTask(task.id, "set_labels", {
+        expected_version: task.row_version,
+        expected_board_revision: snapshot.revision,
+        label_ids: next,
+      });
+      await onChanged();
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusyItem(null);
+    }
+  }
+
+  async function archiveCard() {
+    if (!window.confirm(`Archive "${task.title}"? You can restore it from Archived items for the next 14 days.`)) {
+      return;
+    }
+    setArchiving(true);
+    setError("");
+    try {
+      await commandTask(task.id, "archive_task", {
+        expected_version: task.row_version,
+        expected_board_revision: snapshot.revision,
+      });
+      await onDeleted();
+    } catch (caught) {
+      setError(errorMessage(caught));
+      setArchiving(false);
     }
   }
 
@@ -428,6 +468,32 @@ export function TaskDetailModal({
         )}
         <dt>Description</dt><dd>{task.description || "No description yet."}</dd>
       </dl>
+      {(snapshot.labels ?? []).length > 0 && (
+        <section className="task-label-section">
+          <h3>Labels</h3>
+          <div className="task-label-picker">
+            {(snapshot.labels ?? []).map((label) => {
+              const checked = (task.labels ?? []).some((item) => item.id === label.id);
+              return (
+                <label
+                  className="task-label-choice"
+                  data-label-color={label.color}
+                  key={label.id}
+                  title={label.description || label.name || `${label.color} label`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={busyItem === `label:${label.id}`}
+                    onChange={(event) => void toggleLabel(label.id, event.target.checked)}
+                  />
+                  <span>{label.name || label.description || label.color}</span>
+                </label>
+              );
+            })}
+          </div>
+        </section>
+      )}
       {task.checklist_items.length > 0 && (
         <section>
           <h3>Checklist</h3>
@@ -452,15 +518,25 @@ export function TaskDetailModal({
         onChanged={onChanged}
       />
       <div className="task-danger-zone">
-        <span>Remove this card from the board.</span>
-        <button
-          className="button button--danger"
-          type="button"
-          disabled={deleting}
-          onClick={() => void removeCard()}
-        >
-          {deleting ? "Deleting…" : "Delete card"}
-        </button>
+        <span>Archive the card for later, or permanently delete it.</span>
+        <div className="task-danger-zone__actions">
+          <button
+            className="button button--ghost"
+            type="button"
+            disabled={archiving || deleting}
+            onClick={() => void archiveCard()}
+          >
+            {archiving ? "Archiving…" : "Archive card"}
+          </button>
+          <button
+            className="button button--danger"
+            type="button"
+            disabled={deleting || archiving}
+            onClick={() => void removeCard()}
+          >
+            {deleting ? "Deleting…" : "Delete card"}
+          </button>
+        </div>
       </div>
     </Modal>
   );

@@ -11,6 +11,8 @@ class Board(models.Model):
     name = models.CharField(max_length=200)
     revision = models.PositiveBigIntegerField(default=1)
     archived = models.BooleanField(default=False)
+    background_key = models.CharField(max_length=32, blank=True, default="rainbow")
+    background_image = models.FileField(upload_to="board_backgrounds/", blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="created_boards"
     )
@@ -19,6 +21,21 @@ class Board(models.Model):
 
     class Meta:
         ordering = ["name"]
+
+
+class BoardLabel(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name="labels")
+    color = models.CharField(max_length=16)
+    name = models.CharField(max_length=100, blank=True, default="")
+    description = models.CharField(max_length=500, blank=True, default="")
+    position = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["position", "created_at"]
+        indexes = [models.Index(fields=["board", "position"])]
 
 
 class BoardColumn(models.Model):
@@ -47,6 +64,21 @@ class BoardColumn(models.Model):
             models.UniqueConstraint(fields=["board", "position"], name="uq_board_column_position"),
         ]
         ordering = ["position"]
+
+
+class BoardPresence(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name="presences")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="board_presences"
+    )
+    last_seen_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["board", "user"], name="uq_board_presence_user")
+        ]
+        indexes = [models.Index(fields=["board", "last_seen_at"])]
 
 
 class BoardMembership(models.Model):

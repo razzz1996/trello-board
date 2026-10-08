@@ -6,8 +6,12 @@ export const AUTH_INVALID_EVENT = "emega:auth-invalid";
 import type {
   AdminUser,
   ApiErrorBody,
+  BoardActivityRow,
+  BoardArchivePayload,
   BoardColumn,
+  BoardLabel,
   BoardMembershipAdmin,
+  BoardPresenceUser,
   BoardSnapshot,
   BoardSummary,
   HealthDetail,
@@ -69,7 +73,11 @@ async function request<T>(
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
 
-  if (init.body !== undefined && !headers.has("Content-Type")) {
+  if (
+    init.body !== undefined &&
+    !headers.has("Content-Type") &&
+    !(typeof FormData !== "undefined" && init.body instanceof FormData)
+  ) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -243,6 +251,21 @@ export async function commandBoardColumn(
   );
 }
 
+export async function touchBoardPresence(
+  boardId: string,
+): Promise<{ active_window_seconds: number; users: BoardPresenceUser[] }> {
+  return request(
+    `/api/v1/boards/${encodeURIComponent(boardId)}/presence`,
+    { method: "POST", body: JSON.stringify({}) },
+  );
+}
+
+export async function getBoardPresence(
+  boardId: string,
+): Promise<{ active_window_seconds: number; users: BoardPresenceUser[] }> {
+  return request(`/api/v1/boards/${encodeURIComponent(boardId)}/presence`);
+}
+
 export async function getBoardSnapshot(
   boardId: string,
   knownRevision?: number,
@@ -268,7 +291,23 @@ export async function getBoardSnapshot(
       response.statusText || "Unable to load board",
     );
   }
-  return (await response.json()) as BoardSnapshot;
+  const raw = (await response.json()) as BoardSnapshot;
+  return {
+    ...raw,
+    board: {
+      ...raw.board,
+      background_key: raw.board?.background_key || "rainbow",
+      background_image_url: raw.board?.background_image_url ?? null,
+    },
+    labels: Array.isArray(raw.labels) ? raw.labels : [],
+    columns: (raw.columns ?? []).map((column) => ({
+      ...column,
+      tasks: (column.tasks ?? []).map((task) => ({
+        ...task,
+        labels: Array.isArray(task.labels) ? task.labels : [],
+      })),
+    })),
+  };
 }
 
 export async function getTasks(query = ""): Promise<Task[]> {
@@ -422,6 +461,131 @@ export async function commandBoardMembership(
     {
       method: "POST",
       body: JSON.stringify(payload),
+    },
+    { idempotentMutation: true },
+  );
+}
+
+export async function setBoardBackgroundColor(
+  boardId: string,
+  backgroundKey: string,
+  expectedBoardRevision: number,
+): Promise<{ background_key: string; background_image_url: string | null; board_revision: number }> {
+  return request(
+    `/api/v1/boards/${encodeURIComponent(boardId)}/background`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        background_key: backgroundKey,
+        expected_board_revision: expectedBoardRevision,
+      }),
+    },
+  );
+}
+
+export async function uploadBoardBackground(
+  boardId: string,
+  file: File,
+  expectedBoardRevision: number,
+): Promise<{ background_key: string; background_image_url: string | null; board_revision: number }> {
+  const form = new FormData();
+  form.set("image", file);
+  form.set("expected_board_revision", String(expectedBoardRevision));
+  return request(
+    `/api/v1/boards/${encodeURIComponent(boardId)}/background`,
+    { method: "POST", body: form },
+  );
+}
+
+export async function createBoardLabel(
+  boardId: string,
+  input: { color: BoardLabel["color"]; name: string; description: string },
+  expectedBoardRevision: number,
+): Promise<BoardLabel & { board_revision: number }> {
+  return request(
+    `/api/v1/boards/${encodeURIComponent(boardId)}/labels`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        ...input,
+        expected_board_revision: expectedBoardRevision,
+      }),
+    },
+    { idempotentMutation: true },
+  );
+}
+
+export async function updateBoardLabel(
+  boardId: string,
+  labelId: string,
+  input: { color: BoardLabel["color"]; name: string; description: string },
+  expectedBoardRevision: number,
+): Promise<BoardLabel & { board_revision: number }> {
+  return request(
+    `/api/v1/boards/${encodeURIComponent(boardId)}/labels/${encodeURIComponent(labelId)}/commands/update`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        ...input,
+        expected_board_revision: expectedBoardRevision,
+      }),
+    },
+    { idempotentMutation: true },
+  );
+}
+
+export async function deleteBoardLabel(
+  boardId: string,
+  labelId: string,
+  expectedBoardRevision: number,
+): Promise<{ deleted: boolean; label_id: string; board_revision: number }> {
+  return request(
+    `/api/v1/boards/${encodeURIComponent(boardId)}/labels/${encodeURIComponent(labelId)}/commands/delete`,
+    {
+      method: "POST",
+      body: JSON.stringify({ expected_board_revision: expectedBoardRevision }),
+    },
+    { idempotentMutation: true },
+  );
+}
+
+export async function getBoardActivity(
+  boardId: string,
+): Promise<{ days: number; activity: BoardActivityRow[] }> {
+  return request(`/api/v1/boards/${encodeURIComponent(boardId)}/activity`);
+}
+
+export async function getBoardArchive(boardId: string): Promise<BoardArchivePayload> {
+  return request(`/api/v1/boards/${encodeURIComponent(boardId)}/archived`);
+}
+
+export async function commandArchivedCard(
+  boardId: string,
+  taskId: string,
+  command: "restore" | "delete",
+  expectedBoardRevision: number,
+): Promise<Record<string, unknown>> {
+  return request(
+    `/api/v1/boards/${encodeURIComponent(boardId)}/archived/tasks/${encodeURIComponent(taskId)}/commands/${command}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ expected_board_revision: expectedBoardRevision }),
+    },
+    { idempotentMutation: true },
+  );
+}
+
+export async function commandArchivedList(
+  boardId: string,
+  columnId: string,
+  command: "restore" | "delete",
+  expectedBoardRevision: number,
+): Promise<Record<string, unknown>> {
+  return request(
+    `/api/v1/boards/${encodeURIComponent(boardId)}/archived/lists/${encodeURIComponent(columnId)}/commands/${command}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ expected_board_revision: expectedBoardRevision }),
     },
     { idempotentMutation: true },
   );

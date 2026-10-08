@@ -38,7 +38,10 @@ test("Trello-style board visual contract", async ({ page }) => {
   expect(geometry.canvasWidth).toBeGreaterThan(1200);
   expect(geometry.dockBottom).toBeGreaterThanOrEqual(5);
   expect(geometry.dockBottom).toBeLessThanOrEqual(20);
-  expect(geometry.listCount).toBe(4);
+  expect(geometry.listCount).toBeGreaterThanOrEqual(4);
+  for (const requiredList of ["To Do", "In Progress", "Later", "Done"]) {
+    await expect(page.getByRole("heading", { name: requiredList, exact: true })).toBeVisible();
+  }
   expect(geometry.horizontalOverflow).toBeTruthy();
   expect(geometry.topbarBackground).not.toBe("rgba(0, 0, 0, 0)");
   expect(geometry.canvasBackground).toContain("linear-gradient");

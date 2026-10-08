@@ -36,12 +36,29 @@ export interface BoardSummary {
   name: string;
   revision: number;
   archived: boolean;
+  background_key: string;
+  background_image_url: string | null;
+}
+
+export interface BoardLabel {
+  id: string;
+  color: "green" | "yellow" | "orange" | "red" | "purple" | "blue";
+  name: string;
+  description: string;
+  position: number;
 }
 
 export interface BoardMember {
   id: string;
   username: string;
   role: Role;
+}
+
+export interface BoardPresenceUser {
+  id: string;
+  username: string;
+  last_seen_at: string;
+  is_current_user: boolean;
 }
 
 export interface ChecklistItem {
@@ -148,6 +165,7 @@ export interface Task {
   comments: Comment[];
   change_proposals: ChangeProposal[];
   submissions: Submission[];
+  labels: BoardLabel[];
   created_at: string;
   updated_at: string;
 }
@@ -169,8 +187,44 @@ export interface BoardSnapshot {
   board: BoardSummary;
   membership: { role: Role };
   members: BoardMember[];
+  labels: BoardLabel[];
   revision: number;
   columns: BoardColumn[];
+}
+
+export interface BoardActivityRow {
+  id: string;
+  actor_id: string;
+  actor_username: string;
+  action: string;
+  category: "activity" | "comment";
+  message: string;
+  task_id: string | null;
+  task_title: string | null;
+  created_at: string;
+}
+
+export interface ArchivedCard {
+  id: string;
+  title: string;
+  column_id: string;
+  column_name: string;
+  row_version: number;
+  archived_at: string | null;
+  owner_username: string | null;
+}
+
+export interface ArchivedList {
+  id: string;
+  name: string;
+  archived_at: string | null;
+  card_count: number;
+}
+
+export interface BoardArchivePayload {
+  days: number;
+  cards: ArchivedCard[];
+  lists: ArchivedList[];
 }
 
 export interface NotificationRow {

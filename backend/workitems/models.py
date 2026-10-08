@@ -63,6 +63,7 @@ class Task(models.Model):
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="created_tasks"
     )
+    labels = models.ManyToManyField("boards.BoardLabel", related_name="tasks", blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
